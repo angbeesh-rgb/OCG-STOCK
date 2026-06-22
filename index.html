@@ -5,13 +5,14 @@
 <meta name="viewport" content="width=device-width, initial-scale=1, viewport-fit=cover">
 <title>듀얼 스톡 — OCG 카드 재고</title>
 <link href="https://fonts.googleapis.com/css2?family=Noto+Sans+KR:wght@400;500;700;900&family=Cinzel:wght@600;800&display=swap" rel="stylesheet">
+<script src="https://cdnjs.cloudflare.com/ajax/libs/tesseract.js/5.0.4/tesseract.min.js"></script>
 <style>
 :root{
-  --ink:#0c0e16; --panel:#14172a; --panel-2:#1c2038;
-  --gold:#c9a24b; --gold-bright:#e8c873; --violet:#6a4fb0;
-  --text:#eef0f6; --text-dim:#9aa0b8;
-  --danger:#c75c5c; --ok:#5fbf7f;
-  --line:rgba(201,162,75,0.22); --radius:14px;
+  --ink:#0c0e16;--panel:#14172a;--panel-2:#1c2038;
+  --gold:#c9a24b;--gold-bright:#e8c873;--violet:#6a4fb0;
+  --text:#eef0f6;--text-dim:#9aa0b8;
+  --danger:#c75c5c;--ok:#5fbf7f;
+  --line:rgba(201,162,75,0.22);--radius:14px;
 }
 *{box-sizing:border-box;-webkit-tap-highlight-color:transparent;}
 html,body{height:100%;}
@@ -23,7 +24,6 @@ body{
 }
 .cinzel{font-family:'Cinzel',serif;letter-spacing:.04em;}
 
-/* Header */
 header.app{
   padding:18px 18px 14px;display:flex;align-items:center;justify-content:space-between;
   border-bottom:1px solid var(--line);
@@ -51,13 +51,37 @@ main{flex:1;padding:16px;padding-bottom:90px;max-width:520px;margin:0 auto;width
 }
 video{width:100%;height:100%;object-fit:cover;display:block;}
 canvas#shot{display:none;}
+canvas#ocr-preview{
+  position:absolute;bottom:0;left:0;width:100%;height:18%;
+  opacity:0.35;pointer-events:none;
+}
 .guide{position:absolute;inset:0;display:flex;align-items:center;justify-content:center;pointer-events:none;}
 .guide-box{
   width:70%;aspect-ratio:.685;border:2.5px dashed var(--gold);border-radius:10px;
-  box-shadow:0 0 0 9999px rgba(0,0,0,.45);transition:border-color .15s,box-shadow .15s;
+  box-shadow:0 0 0 9999px rgba(0,0,0,.45);transition:border-color .15s;
+  position:relative;
 }
 .guide-box.stable{border-color:var(--ok);border-style:solid;}
-.cam-status{position:absolute;bottom:10px;left:0;right:0;text-align:center;font-size:12px;color:var(--text-dim);pointer-events:none;}
+/* 카드번호 영역 표시 */
+.guide-box::after{
+  content:'카드번호';font-size:9px;color:var(--gold-bright);letter-spacing:.1em;
+  position:absolute;bottom:6%;left:50%;transform:translateX(-50%);
+  background:rgba(0,0,0,.55);padding:2px 7px;border-radius:4px;
+  border:1px dashed var(--gold-bright);white-space:nowrap;
+}
+
+.cam-status{
+  position:absolute;bottom:10px;left:0;right:0;text-align:center;
+  font-size:12px;color:var(--text-dim);pointer-events:none;
+  text-shadow:0 1px 4px rgba(0,0,0,.8);
+}
+.ocr-status{
+  position:absolute;top:10px;left:10px;right:10px;
+  background:rgba(12,14,22,.75);border:1px solid var(--line);border-radius:8px;
+  padding:6px 10px;font-size:11px;color:var(--gold-bright);display:none;
+  text-align:center;backdrop-filter:blur(3px);
+}
+.ocr-status.show{display:block;}
 .progress-ring{
   position:absolute;top:10px;right:10px;width:36px;height:36px;border-radius:50%;
   border:3px solid rgba(255,255,255,.15);border-top-color:var(--gold-bright);display:none;
@@ -68,10 +92,18 @@ canvas#shot{display:none;}
 .cam-tip b{color:var(--gold-bright);font-weight:700;}
 .cam-start{
   margin-top:14px;width:100%;padding:14px;border-radius:12px;border:none;
-  background:linear-gradient(135deg,var(--gold),var(--violet));color:#0c0e16;font-weight:800;font-size:15px;cursor:pointer;
+  background:linear-gradient(135deg,var(--gold),var(--violet));color:#0c0e16;
+  font-weight:800;font-size:15px;cursor:pointer;
 }
+.cooldown-bar{
+  height:3px;background:var(--panel-2);border-radius:999px;margin-top:10px;overflow:hidden;display:none;
+}
+.cooldown-bar.show{display:block;}
+.cooldown-fill{height:100%;background:var(--gold-bright);width:100%;
+  animation:cooldown 2.5s linear forwards;}
+@keyframes cooldown{from{width:100%}to{width:0%}}
 
-/* ── Overlay / Sheet ── */
+/* Modal */
 .overlay{
   position:fixed;inset:0;background:rgba(5,6,12,.75);backdrop-filter:blur(4px);
   display:none;align-items:flex-end;justify-content:center;z-index:50;
@@ -83,34 +115,35 @@ canvas#shot{display:none;}
   max-height:90vh;overflow-y:auto;
 }
 @keyframes up{from{transform:translateY(30px);opacity:0;}to{transform:translateY(0);opacity:1;}}
-
-/* 인식결과 헤더 */
 .sheet-head{display:flex;gap:12px;align-items:flex-start;margin-bottom:16px;}
-.card-thumb{
-  width:56px;height:78px;border-radius:7px;flex-shrink:0;
+.card-img{
+  width:60px;height:83px;border-radius:6px;flex-shrink:0;
+  object-fit:cover;border:1px solid var(--line);background:var(--panel-2);
+}
+.card-img-placeholder{
+  width:60px;height:83px;border-radius:6px;flex-shrink:0;
   background:linear-gradient(155deg,var(--violet),#2a2150);
   display:flex;align-items:center;justify-content:center;
-  font-size:11px;color:var(--text-dim);border:1px solid var(--line);
-  text-align:center;padding:4px;line-height:1.3;
+  font-size:10px;color:var(--text-dim);border:1px solid var(--line);text-align:center;padding:4px;
 }
 .sheet-head .name{font-weight:800;font-size:16px;margin-bottom:4px;}
-.sheet-head .meta{font-size:12px;color:var(--text-dim);}
-
-/* 일러스트 선택 그리드 */
+.sheet-head .meta{font-size:12px;color:var(--text-dim);line-height:1.5;}
 .field-label{font-size:11px;color:var(--gold-bright);letter-spacing:.1em;text-transform:uppercase;margin:14px 0 8px;}
+
 .illust-grid{display:grid;grid-template-columns:repeat(3,1fr);gap:8px;}
 .illust-card{
   background:var(--panel-2);border:2px solid var(--line);border-radius:10px;
-  padding:8px 6px;cursor:pointer;text-align:center;transition:.15s;
+  padding:6px;cursor:pointer;text-align:center;transition:.15s;
 }
 .illust-card.selected{border-color:var(--gold-bright);background:rgba(201,162,75,.1);}
-.illust-card .ic-thumb{
-  width:100%;aspect-ratio:.685;border-radius:5px;margin-bottom:6px;
+.illust-card img{width:100%;aspect-ratio:.685;object-fit:cover;border-radius:4px;margin-bottom:4px;}
+.illust-card .ic-placeholder{
+  width:100%;aspect-ratio:.685;border-radius:4px;margin-bottom:4px;
   background:linear-gradient(155deg,var(--violet),#2a2150);
-  display:flex;align-items:center;justify-content:center;font-size:9px;color:var(--text-dim);
+  display:flex;align-items:center;justify-content:center;font-size:8px;color:var(--text-dim);
 }
-.illust-card .ic-code{font-size:10px;color:var(--gold-bright);font-weight:700;}
-.illust-card .ic-label{font-size:10px;color:var(--text-dim);margin-top:2px;line-height:1.2;}
+.illust-card .ic-code{font-size:9px;color:var(--gold-bright);font-weight:700;}
+.illust-card .ic-label{font-size:9px;color:var(--text-dim);margin-top:2px;line-height:1.2;}
 
 select.rarity{
   width:100%;padding:12px;border-radius:10px;background:var(--panel-2);
@@ -118,13 +151,13 @@ select.rarity{
 }
 .stepper{display:flex;align-items:center;gap:14px;justify-content:center;margin-top:6px;}
 .stepper button{
-  width:44px;height:44px;border-radius:50%;border:1px solid var(--line);background:var(--panel-2);
-  color:var(--gold-bright);font-size:22px;font-weight:800;cursor:pointer;
+  width:44px;height:44px;border-radius:50%;border:1px solid var(--line);
+  background:var(--panel-2);color:var(--gold-bright);font-size:22px;font-weight:800;cursor:pointer;
 }
 .stepper .qty{font-size:26px;font-weight:800;min-width:46px;text-align:center;}
 .sheet-actions{display:flex;gap:10px;margin-top:20px;}
 .sheet-actions button{flex:1;padding:13px;border-radius:10px;border:none;font-weight:800;font-size:14px;cursor:pointer;}
-.btn-cancel{background:var(--panel-2);color:var(--text-dim);border:1px solid var(--line) !important;}
+.btn-cancel{background:var(--panel-2);color:var(--text-dim);border:1px solid var(--line)!important;}
 .btn-confirm.in{background:var(--ok);color:#0c1a10;}
 .btn-confirm.out{background:var(--danger);color:#1a0c0c;}
 
@@ -136,25 +169,16 @@ select.rarity{
 }
 .card-group{background:var(--panel);border:1px solid var(--line);border-radius:12px;margin-bottom:12px;overflow:hidden;}
 .group-header{padding:12px 14px 10px;display:flex;align-items:center;gap:10px;border-bottom:1px solid var(--line);}
+.group-header img{width:36px;height:50px;object-fit:cover;border-radius:4px;flex-shrink:0;}
 .group-name{font-weight:800;font-size:14px;}
-.print-row{
-  display:flex;align-items:center;gap:10px;padding:10px 14px;
-  border-bottom:1px solid rgba(201,162,75,.1);
-}
+.print-row{display:flex;align-items:center;gap:10px;padding:10px 14px;border-bottom:1px solid rgba(201,162,75,.1);}
 .print-row:last-child{border-bottom:none;}
-.print-thumb{
-  width:36px;height:50px;border-radius:5px;flex-shrink:0;
-  background:linear-gradient(155deg,var(--violet),#2a2150);
-  display:flex;align-items:center;justify-content:center;font-size:8px;color:var(--text-dim);
-}
+.print-thumb{width:32px;height:44px;border-radius:4px;flex-shrink:0;object-fit:cover;background:var(--panel-2);}
 .print-info{flex:1;}
 .print-code{font-size:11px;color:var(--gold-bright);font-weight:700;}
 .print-illust{font-size:11px;color:var(--text-dim);margin-top:1px;}
 .rarity-badges{display:flex;flex-wrap:wrap;gap:5px;margin-top:5px;}
-.rarity-badge{
-  font-size:11px;padding:2px 8px;border-radius:999px;
-  background:var(--panel-2);border:1px solid var(--line);
-}
+.rarity-badge{font-size:11px;padding:2px 8px;border-radius:999px;background:var(--panel-2);border:1px solid var(--line);}
 .rarity-badge .bqty{color:var(--gold-bright);font-weight:800;margin-left:4px;}
 .rarity-badge.zero{opacity:.35;}
 .empty{text-align:center;color:var(--text-dim);font-size:13px;padding:30px 0;}
@@ -170,16 +194,15 @@ select.rarity{
 .log-sub{font-size:11px;color:var(--text-dim);margin-top:2px;}
 .log-time{color:var(--text-dim);font-size:11px;white-space:nowrap;}
 
-/* Toast */
 .toast{
   position:fixed;bottom:90px;left:50%;transform:translateX(-50%) translateY(20px);
   background:var(--panel-2);border:1px solid var(--gold);color:var(--text);
   padding:10px 18px;border-radius:999px;font-size:13px;font-weight:700;
-  opacity:0;transition:.25s;z-index:60;pointer-events:none;white-space:nowrap;
+  opacity:0;transition:.25s;z-index:60;pointer-events:none;white-space:nowrap;max-width:90vw;
+  text-overflow:ellipsis;overflow:hidden;
 }
 .toast.show{opacity:1;transform:translateX(-50%) translateY(0);}
 
-/* Nav */
 nav.tabbar{
   position:fixed;bottom:0;left:0;right:0;background:var(--panel);
   border-top:1px solid var(--line);display:flex;z-index:30;
@@ -206,20 +229,24 @@ nav.tabbar button.active{color:var(--gold-bright);}
 </header>
 
 <main>
-  <!-- 카메라 -->
   <section class="screen active" id="screen-cam">
     <div class="cam-wrap">
       <video id="video" playsinline muted></video>
       <canvas id="shot"></canvas>
+      <canvas id="ocr-preview"></canvas>
       <div class="guide"><div class="guide-box" id="guideBox"></div></div>
       <div class="progress-ring" id="ring"></div>
+      <div class="ocr-status" id="ocrStatus"></div>
       <div class="cam-status" id="camStatus">카메라를 시작해줘</div>
     </div>
-    <div class="cam-tip">카드를 가이드 박스에 맞추고 <b>가만히</b> 있으면 자동으로 인식돼.<br>촬영된 이미지는 저장되지 않아.</div>
+    <div class="cooldown-bar" id="cooldownBar"><div class="cooldown-fill" id="cooldownFill"></div></div>
+    <div class="cam-tip">
+      카드를 가이드 박스에 맞추고 <b>하단 카드번호가 잘 보이게</b> 비춰줘.<br>
+      가만히 있으면 자동으로 인식돼. 촬영된 이미지는 저장되지 않아.
+    </div>
     <button class="cam-start" id="camStartBtn">카메라 시작</button>
   </section>
 
-  <!-- 검색 -->
   <section class="screen" id="screen-search">
     <div class="search-bar">
       <input type="text" id="searchInput" placeholder="카드명으로 검색...">
@@ -227,18 +254,15 @@ nav.tabbar button.active{color:var(--gold-bright);}
     <div id="searchResults"></div>
   </section>
 
-  <!-- 로그 -->
   <section class="screen" id="screen-log">
     <div id="logList"></div>
   </section>
 </main>
 
-<!-- 인식/선택 모달 -->
 <div class="overlay" id="overlay">
   <div class="sheet">
-    <!-- 카드명 헤더 -->
     <div class="sheet-head">
-      <div class="card-thumb" id="modalThumb">CARD</div>
+      <div id="modalImgWrap"></div>
       <div>
         <div class="name" id="modalName">-</div>
         <div class="meta" id="modalMeta">-</div>
@@ -246,15 +270,12 @@ nav.tabbar button.active{color:var(--gold-bright);}
       </div>
     </div>
 
-    <!-- 일러스트 선택 -->
     <div class="field-label">일러스트 / 인쇄판 선택</div>
     <div class="illust-grid" id="illustGrid"></div>
 
-    <!-- 레어도 -->
     <div class="field-label">레어도</div>
     <select class="rarity" id="raritySelect"></select>
 
-    <!-- 매수 -->
     <div class="field-label">매수</div>
     <div class="stepper">
       <button id="qtyMinus">−</button>
@@ -279,146 +300,179 @@ nav.tabbar button.active{color:var(--gold-bright);}
 
 <script>
 /* ==========================================================================
-   카드 마스터 데이터 (목업)
-   실제 서비스 → YGOPRODECK API 또는 자체 DB로 교체
-   prints 배열의 각 항목 = "카드번호 단위 인쇄판" → 일러스트 구분 기준
-
-   Firestore 구조 예시
-   ─────────────────────────────────────────────
-   cards/{cardName_slug}
-     name: "블랙 매지션"
-     prints: [{ printId, illustLabel, rarities }]
-
-   inventory/{printId}_{rarity}
-     cardName, printId, illustLabel, rarity, quantity, updatedAt
-
-   transactions/{autoId}
-     cardName, printId, illustLabel, rarity, type, amount, resultQty, timestamp
-   ========================================================================== */
-const MOCK_CARDS = [
-  {
-    id: 'black-magician',
-    name: '블랙 매지션',
-    prints: [
-      { printId:'LOB-K003', illustLabel:'초기판 (LOB)', rarities:['노멀','울트라레어'] },
-      { printId:'SDY-K006', illustLabel:'스트럭처덱판 (SDY)', rarities:['노멀'] },
-      { printId:'MFC-K051', illustLabel:'마법사의 심판판 (MFC)', rarities:['울트라레어','시크릿레어'] },
-    ]
-  },
-  {
-    id: 'blue-eyes',
-    name: '푸른 눈의 백룡',
-    prints: [
-      { printId:'LOB-K001', illustLabel:'초기판 (LOB)', rarities:['울트라레어'] },
-      { printId:'SDK-K001', illustLabel:'카이바덱판 (SDK)', rarities:['울트라레어'] },
-    ]
-  },
-  {
-    id: 'red-eyes',
-    name: '붉은 눈의 흑룡',
-    prints: [
-      { printId:'LOB-K070', illustLabel:'초기판 (LOB)', rarities:['레어','울트라레어'] },
-      { printId:'SDP-K001', illustLabel:'조이덱판 (SDP)', rarities:['노멀'] },
-    ]
-  },
-];
-
-/* ==========================================================================
-   로컬 DB 레이어
-   Firebase Firestore 전환 시 read/write 함수만 교체하면 됨
-   재고 키: `{printId}||{rarity}` (|| 구분자로 복합키 구성)
+   DB 레이어 (localStorage → Firestore로 교체 시 이 블록만 수정)
+   재고 키: `{printId}||{rarity}`
    ========================================================================== */
 const DB = {
-  CARDS_KEY:  'ocg_cards_master',
-  INV_KEY:    'ocg_inventory',
-  TX_KEY:     'ocg_transactions',
-
-  read(k, fb){ try{ return JSON.parse(localStorage.getItem(k)) ?? fb; }catch(e){ return fb; } },
-  write(k, v){ localStorage.setItem(k, JSON.stringify(v)); },
-
-  getCards(){ return this.read(this.CARDS_KEY, MOCK_CARDS); },
-  getInventory(){ return this.read(this.INV_KEY, {}); },
-  getTx(){ return this.read(this.TX_KEY, []); },
-
-  // 재고 조회 — printId + rarity 조합으로 조회
-  getStock(printId, rarity){
-    const inv = this.getInventory();
-    return inv[printId + '||' + rarity]?.quantity || 0;
+  INV:'ocg_inventory', TX:'ocg_transactions',
+  read(k,fb){try{return JSON.parse(localStorage.getItem(k))??fb;}catch(e){return fb;}},
+  write(k,v){localStorage.setItem(k,JSON.stringify(v));},
+  getInventory(){return this.read(this.INV,{});},
+  getTx(){return this.read(this.TX,[]);},
+  getStock(printId,rarity){
+    return this.getInventory()[printId+'||'+rarity]?.quantity||0;
   },
-
-  // 입출고 반영
-  upsertInventory(cardName, printId, illustLabel, rarity, delta){
-    const inv = this.getInventory();
-    const key = printId + '||' + rarity;
-    const prev = inv[key]?.quantity || 0;
-    const next = Math.max(0, prev + delta);
-    inv[key] = { cardName, printId, illustLabel, rarity, quantity:next, updatedAt:Date.now() };
-    this.write(this.INV_KEY, inv);
+  upsertInventory(cardName,printId,illustLabel,rarity,delta){
+    const inv=this.getInventory();
+    const key=printId+'||'+rarity;
+    const prev=inv[key]?.quantity||0;
+    const next=Math.max(0,prev+delta);
+    inv[key]={cardName,printId,illustLabel,rarity,quantity:next,updatedAt:Date.now()};
+    this.write(this.INV,inv);
     return next;
   },
-
   addTx(entry){
-    const tx = this.getTx();
+    const tx=this.getTx();
     tx.unshift(entry);
-    this.write(this.TX_KEY, tx.slice(0, 300));
+    this.write(this.TX,tx.slice(0,300));
   }
 };
 
-// 최초 마스터 데이터 세팅
-if(!localStorage.getItem(DB.CARDS_KEY)) DB.write(DB.CARDS_KEY, MOCK_CARDS);
-
 /* ==========================================================================
-   모드 (입고 / 출고)
+   YGOPRODECK API
    ========================================================================== */
-let mode = 'in';
-document.getElementById('modeInBtn').addEventListener('click', () => setMode('in'));
-document.getElementById('modeOutBtn').addEventListener('click', () => setMode('out'));
-function setMode(m){
-  mode = m;
-  document.getElementById('modeInBtn').classList.toggle('active', m==='in');
-  document.getElementById('modeOutBtn').classList.toggle('active', m==='out');
+const API = 'https://db.ygoprodeck.com/api/v7/cardinfo.php';
+
+// 카드번호(set code)로 조회 → 인쇄판+일러스트 정보 포함
+async function fetchByCode(code){
+  const url = `${API}?cardsetcode=${encodeURIComponent(code)}&language=ko`;
+  const res = await fetch(url);
+  if(!res.ok) return null;
+  const data = await res.json();
+  return data.data?.[0] || null;
+}
+
+// 카드명으로 검색 (검색 화면용)
+async function searchByName(name){
+  const url = `${API}?fname=${encodeURIComponent(name)}&language=ko`;
+  const res = await fetch(url);
+  if(!res.ok) return [];
+  const data = await res.json();
+  return data.data || [];
+}
+
+// API 응답에서 인쇄판 목록 추출
+function parsePrints(card){
+  if(!card.card_sets) return [{
+    printId:'UNKNOWN', illustLabel:'알 수 없음', rarities:['노멀'], imageUrl:card.card_images?.[0]?.image_url
+  }];
+
+  // 이미지 매핑 — card_images 배열이 일러스트 순서대로 들어있음
+  const images = card.card_images || [];
+
+  // card_sets 중복 제거 후 인쇄판으로 변환
+  const seen = new Set();
+  const prints = [];
+  card.card_sets.forEach(s=>{
+    const key = s.set_code;
+    if(seen.has(key)) return;
+    seen.add(key);
+    // 이미지 — 같은 카드 내 여러 일러스트는 images 배열 순서로 대응
+    const imgIdx = prints.length < images.length ? prints.length : 0;
+    prints.push({
+      printId: s.set_code,
+      illustLabel: `${s.set_name} (${s.set_code})`,
+      rarities: collectRarities(card.card_sets, s.set_code),
+      imageUrl: images[imgIdx]?.image_url_small || images[0]?.image_url_small
+    });
+  });
+  return prints;
+}
+
+function collectRarities(sets, code){
+  const r=[];
+  sets.forEach(s=>{ if(s.set_code===code&&!r.includes(s.set_rarity)) r.push(s.set_rarity); });
+  return r.length ? r : ['Normal'];
 }
 
 /* ==========================================================================
-   카메라 / 자동인식
+   OCR 엔진 (Tesseract.js)
    ========================================================================== */
-let detecting=false, stableCount=0, lastFrameData=null, overlayOpen=false;
-const STABLE_THRESHOLD=6, DIFF_TOL=10;
-let mockCycle=0;
-const video=document.getElementById('video');
-const guideBox=document.getElementById('guideBox');
-const camStatus=document.getElementById('camStatus');
-const ring=document.getElementById('ring');
+let worker = null;
+let ocrReady = false;
 
-document.getElementById('camStartBtn').addEventListener('click', startCamera);
+async function initOCR(){
+  setOcrStatus('OCR 초기화 중...');
+  worker = await Tesseract.createWorker('eng', 1, {
+    logger: m => {
+      if(m.status === 'recognizing text'){
+        setOcrStatus(`OCR 인식 중... ${Math.round(m.progress*100)}%`);
+      }
+    }
+  });
+  // 카드번호 패턴에 최적화 — 영문+숫자+하이픈만
+  await worker.setParameters({
+    tessedit_char_whitelist: 'ABCDEFGHIJKLMNOPQRSTUVWXYZ0123456789-',
+    tessedit_pageseg_mode: '7', // 한 줄 텍스트
+  });
+  ocrReady = true;
+  setOcrStatus('');
+}
 
-async function startCamera(){
+// 카드번호 정규식 — LOB-K003 / DUNE-KR025 / RC04-JP011 등
+const CODE_REGEX = /[A-Z]{2,6}-[A-Z]{0,2}\d{2,4}/g;
+
+async function runOCR(canvas){
+  if(!ocrReady) return null;
+  setOcrStatus('카드번호 읽는 중...');
+  const { data:{ text } } = await worker.recognize(canvas);
+  setOcrStatus('');
+  const matches = text.replace(/\s/g,'').match(CODE_REGEX);
+  return matches ? matches[0] : null;
+}
+
+/* ==========================================================================
+   카메라 / 자동인식 (프레임 안정 → OCR → API)
+   ========================================================================== */
+let detecting=false, stableCount=0, lastFrameData=null;
+let overlayOpen=false, cooldown=false;
+const STABLE_THRESHOLD=7, DIFF_TOL=8;
+
+const video = document.getElementById('video');
+const shotCanvas = document.getElementById('shot');
+const ocrCanvas = document.getElementById('ocr-preview');
+const guideBox = document.getElementById('guideBox');
+const camStatus = document.getElementById('camStatus');
+const ring = document.getElementById('ring');
+const ocrStatusEl = document.getElementById('ocrStatus');
+const cooldownBar = document.getElementById('cooldownBar');
+
+function setOcrStatus(msg){
+  if(msg){ ocrStatusEl.textContent=msg; ocrStatusEl.classList.add('show'); }
+  else ocrStatusEl.classList.remove('show');
+}
+
+document.getElementById('camStartBtn').addEventListener('click', async ()=>{
+  document.getElementById('camStartBtn').disabled = true;
+  document.getElementById('camStartBtn').textContent = 'OCR 초기화 중...';
+  await initOCR();
   try{
-    const stream = await navigator.mediaDevices.getUserMedia({video:{facingMode:'environment'},audio:false});
+    const stream = await navigator.mediaDevices.getUserMedia({video:{facingMode:'environment',width:{ideal:1920},height:{ideal:1080}},audio:false});
     video.srcObject = stream;
     await video.play();
     document.getElementById('camStartBtn').style.display='none';
-    camStatus.textContent='카드를 가이드 안에 맞춰줘';
+    camStatus.textContent='카드 하단 카드번호가 보이게 비춰줘';
     detecting=true;
     requestAnimationFrame(detectLoop);
   }catch(err){
     camStatus.textContent='카메라 권한이 필요해 ('+err.message+')';
+    document.getElementById('camStartBtn').disabled=false;
+    document.getElementById('camStartBtn').textContent='카메라 시작';
   }
-}
+});
 
 let lastTick=0;
 function detectLoop(ts){
   if(!detecting) return;
-  if(ts-lastTick>250){ lastTick=ts; checkFrame(); }
+  if(ts-lastTick>300){lastTick=ts;checkFrame();}
   requestAnimationFrame(detectLoop);
 }
 
-const shotCanvas=document.getElementById('shot');
 function checkFrame(){
-  if(video.readyState<2||overlayOpen) return;
+  if(video.readyState<2||overlayOpen||cooldown) return;
   const ctx=shotCanvas.getContext('2d',{willReadFrequently:true});
-  const W=80, H=Math.round(80/0.685);
-  shotCanvas.width=W; shotCanvas.height=H;
+  const W=120,H=Math.round(120/0.685);
+  shotCanvas.width=W;shotCanvas.height=H;
   ctx.drawImage(video,0,0,W,H);
   const frame=ctx.getImageData(0,0,W,H).data;
 
@@ -426,177 +480,251 @@ function checkFrame(){
     let diff=0;
     for(let i=0;i<frame.length;i+=4) diff+=Math.abs(frame[i]-lastFrameData[i]);
     const avg=diff/(frame.length/4);
-
     if(avg<DIFF_TOL){
       stableCount++;
       guideBox.classList.add('stable');
-      camStatus.textContent=`인식 중... (${Math.min(stableCount,STABLE_THRESHOLD)}/${STABLE_THRESHOLD})`;
+      camStatus.textContent=`인식 준비 (${Math.min(stableCount,STABLE_THRESHOLD)}/${STABLE_THRESHOLD})`;
     }else{
       stableCount=0;
       guideBox.classList.remove('stable');
-      camStatus.textContent='카드를 가이드 안에 맞춰줘';
+      camStatus.textContent='카드를 가이드에 맞추고 가만히 있어줘';
     }
-    if(stableCount>=STABLE_THRESHOLD){ stableCount=0; runRecognition(); }
+    if(stableCount>=STABLE_THRESHOLD){stableCount=0;captureAndRecognize();}
   }
   lastFrameData=frame;
 }
 
-function runRecognition(){
+async function captureAndRecognize(){
   ring.classList.add('spin');
-  camStatus.textContent='카드 매칭 중...';
-  // ↓ 실제 이미지 임베딩 모델 호출 자리
-  // 지금은 데모: 카드를 순환하며 반환, printId까지 구분해서 넘김
-  setTimeout(()=>{
+  camStatus.textContent='카드번호 인식 중...';
+  cooldown=true;
+
+  // 고해상도로 카드 하단 15% 크롭 (카드번호 영역)
+  const vw=video.videoWidth, vh=video.videoHeight;
+  // 가이드박스는 화면 너비의 70%, 가로세로 0.685 비율로 중앙 위치
+  const guideW = vw*0.70;
+  const guideH = guideW/0.685;
+  const gx=(vw-guideW)/2, gy=(vh-guideH)/2;
+  // 카드번호는 하단 15% 영역
+  const cropH=guideH*0.15;
+  const cropY=gy+guideH-cropH;
+
+  // OCR용 캔버스 — 해상도 높여서 인식률 향상
+  const oc=document.createElement('canvas');
+  const scale=3; // 3배 업스케일
+  oc.width=guideW*scale; oc.height=cropH*scale;
+  const octx=oc.getContext('2d');
+  // 전처리: 명도/대비 높이기
+  octx.filter='contrast(2) brightness(1.3) grayscale(1)';
+  octx.drawImage(video,gx,cropY,guideW,cropH,0,0,oc.width,oc.height);
+
+  // 미리보기 캔버스에 표시 (디버깅용)
+  const pc=ocrCanvas.getContext('2d');
+  ocrCanvas.width=oc.width; ocrCanvas.height=oc.height;
+  pc.drawImage(oc,0,0);
+
+  try{
+    const code = await runOCR(oc);
     ring.classList.remove('spin');
-    const cards=DB.getCards();
-    const card=cards[mockCycle%cards.length];
-    mockCycle++;
-    // 실제 모델은 가장 유사한 printId(일러스트)까지 특정해줌
-    // 여기선 그 카드의 첫 번째 인쇄판을 "인식 결과"로 넘김
-    openSheet(card, card.prints[0].printId);
-    // 캡처 이미지 데이터는 여기서 스코프 종료 → 자동 폐기
-  }, 400);
+
+    if(!code){
+      showToast('카드번호를 읽지 못했어 — 조명/각도 조절해봐');
+      camStatus.textContent='카드 하단 카드번호가 보이게 비춰줘';
+      startCooldown(2000);
+      return;
+    }
+
+    camStatus.textContent=`인식됨: ${code} — API 조회 중...`;
+    setOcrStatus(`카드번호: ${code} 조회 중...`);
+
+    const cardData = await fetchByCode(code);
+    setOcrStatus('');
+
+    if(!cardData){
+      showToast(`${code} — DB에서 카드를 찾지 못했어`);
+      camStatus.textContent='카드 하단 카드번호가 보이게 비춰줘';
+      startCooldown(2000);
+      return;
+    }
+
+    const prints = parsePrints(cardData);
+    // 인식된 코드와 일치하는 인쇄판 우선 선택
+    const detectedPrint = prints.find(p=>p.printId===code)||prints[0];
+    openSheet(cardData, prints, detectedPrint.printId);
+
+  }catch(err){
+    ring.classList.remove('spin');
+    setOcrStatus('');
+    showToast('오류: '+err.message);
+    startCooldown(1500);
+  }
+}
+
+function startCooldown(ms){
+  cooldownBar.classList.add('show');
+  const fill=document.getElementById('cooldownFill');
+  fill.style.animation='none';
+  fill.offsetHeight; // reflow
+  fill.style.animation=`cooldown ${ms}ms linear forwards`;
+  setTimeout(()=>{cooldown=false;cooldownBar.classList.remove('show');},ms);
+}
+
+/* ==========================================================================
+   모드
+   ========================================================================== */
+let mode='in';
+document.getElementById('modeInBtn').addEventListener('click',()=>setMode('in'));
+document.getElementById('modeOutBtn').addEventListener('click',()=>setMode('out'));
+function setMode(m){
+  mode=m;
+  document.getElementById('modeInBtn').classList.toggle('active',m==='in');
+  document.getElementById('modeOutBtn').classList.toggle('active',m==='out');
 }
 
 /* ==========================================================================
    모달
    ========================================================================== */
-let currentCard=null, currentPrint=null, currentQty=1;
-const overlay=document.getElementById('overlay');
-const illustGrid=document.getElementById('illustGrid');
-const raritySelect=document.getElementById('raritySelect');
+let currentCard=null,currentPrint=null,currentQty=1,currentPrints=[];
 
-// printId: 인식 모델이 특정한 인쇄판 (일러스트 구분 단위)
-function openSheet(card, detectedPrintId){
-  currentCard=card; currentQty=1;
-  document.getElementById('modalThumb').textContent=card.name.slice(0,2);
-  document.getElementById('modalName').textContent=card.name;
+function openSheet(card,prints,detectedPrintId){
+  currentCard=card; currentPrints=prints; currentQty=1;
+
+  // 헤더 이미지
+  const imgWrap=document.getElementById('modalImgWrap');
+  const imgUrl=prints.find(p=>p.printId===detectedPrintId)?.imageUrl||prints[0]?.imageUrl;
+  if(imgUrl){
+    imgWrap.innerHTML=`<img class="card-img" src="${imgUrl}" alt="${card.name}">`;
+  }else{
+    imgWrap.innerHTML=`<div class="card-img-placeholder">${(card.name||'').slice(0,2)}</div>`;
+  }
+
+  document.getElementById('modalName').textContent=card.name||'Unknown';
   document.getElementById('modalMode').textContent=mode==='in'?'입고 처리':'출고 처리';
+  document.getElementById('modalMeta').textContent=
+    `${card.type||''} ${card.race||''}`.trim() +
+    (prints.length>1?` · ${prints.length}가지 인쇄판`:'');
   document.getElementById('qtyVal').textContent=1;
   document.getElementById('confirmBtn').className='btn-confirm '+mode;
   document.getElementById('confirmBtn').textContent=mode==='in'?'입고 저장':'출고 저장';
 
-  // 일러스트 그리드 렌더
-  illustGrid.innerHTML='';
-  card.prints.forEach(p=>{
+  // 일러스트 그리드
+  const grid=document.getElementById('illustGrid');
+  grid.innerHTML='';
+  prints.forEach(p=>{
     const div=document.createElement('div');
     div.className='illust-card'+(p.printId===detectedPrintId?' selected':'');
-    div.innerHTML=`
-      <div class="ic-thumb">${p.printId.split('-')[0]}</div>
-      <div class="ic-code">${p.printId}</div>
-      <div class="ic-label">${p.illustLabel}</div>`;
+    div.innerHTML=p.imageUrl
+      ?`<img src="${p.imageUrl}" alt="${p.printId}" loading="lazy"><div class="ic-code">${p.printId}</div>`
+      :`<div class="ic-placeholder">${p.printId.split('-')[0]}</div><div class="ic-code">${p.printId}</div>`;
     div.addEventListener('click',()=>{
-      illustGrid.querySelectorAll('.illust-card').forEach(c=>c.classList.remove('selected'));
+      grid.querySelectorAll('.illust-card').forEach(c=>c.classList.remove('selected'));
       div.classList.add('selected');
       selectPrint(p);
+      // 메인 이미지도 교체
+      if(p.imageUrl) imgWrap.innerHTML=`<img class="card-img" src="${p.imageUrl}" alt="">`;
     });
-    illustGrid.appendChild(div);
+    grid.appendChild(div);
   });
 
-  // 인식된 인쇄판 기본 선택
-  const matched=card.prints.find(p=>p.printId===detectedPrintId)||card.prints[0];
+  const matched=prints.find(p=>p.printId===detectedPrintId)||prints[0];
   selectPrint(matched);
-
-  // 부가 메타
-  document.getElementById('modalMeta').textContent=
-    card.prints.length>1
-      ? `이 카드는 ${card.prints.length}가지 인쇄판이 있어 — 아래서 골라줘`
-      : `인쇄판: ${matched.illustLabel}`;
-
-  overlay.classList.add('show');
+  document.getElementById('overlay').classList.add('show');
   overlayOpen=true;
 }
 
 function selectPrint(p){
   currentPrint=p;
-  raritySelect.innerHTML='';
+  const sel=document.getElementById('raritySelect');
+  sel.innerHTML='';
   p.rarities.forEach(r=>{
     const o=document.createElement('option');
     const qty=DB.getStock(p.printId,r);
     o.value=r; o.textContent=`${r}  (현재 ${qty}장)`;
-    raritySelect.appendChild(o);
+    sel.appendChild(o);
   });
 }
 
 function closeSheet(){
-  overlay.classList.remove('show');
-  overlayOpen=false;
-  currentCard=null; currentPrint=null;
+  document.getElementById('overlay').classList.remove('show');
+  overlayOpen=false; currentCard=null; currentPrint=null;
+  startCooldown(2500);
 }
 
 document.getElementById('qtyPlus').addEventListener('click',()=>{
-  currentQty++; document.getElementById('qtyVal').textContent=currentQty;
+  currentQty++;document.getElementById('qtyVal').textContent=currentQty;
 });
 document.getElementById('qtyMinus').addEventListener('click',()=>{
-  currentQty=Math.max(1,currentQty-1); document.getElementById('qtyVal').textContent=currentQty;
+  currentQty=Math.max(1,currentQty-1);document.getElementById('qtyVal').textContent=currentQty;
 });
 document.getElementById('cancelBtn').addEventListener('click',closeSheet);
 
 document.getElementById('confirmBtn').addEventListener('click',()=>{
   if(!currentCard||!currentPrint) return;
-  const rarity=raritySelect.value;
+  const rarity=document.getElementById('raritySelect').value;
   const delta=mode==='in'?currentQty:-currentQty;
-
   if(mode==='out'&&DB.getStock(currentPrint.printId,rarity)<currentQty){
-    showToast('⚠ 재고가 부족해!'); return;
+    showToast('⚠ 재고가 부족해!');return;
   }
-
-  const newQty=DB.upsertInventory(
-    currentCard.name, currentPrint.printId, currentPrint.illustLabel, rarity, delta
-  );
+  const newQty=DB.upsertInventory(currentCard.name,currentPrint.printId,currentPrint.illustLabel,rarity,delta);
   DB.addTx({
-    cardName:currentCard.name, printId:currentPrint.printId,
-    illustLabel:currentPrint.illustLabel, rarity,
-    type:mode, amount:currentQty, resultQty:newQty, timestamp:Date.now()
+    cardName:currentCard.name,printId:currentPrint.printId,
+    illustLabel:currentPrint.illustLabel,rarity,
+    type:mode,amount:currentQty,resultQty:newQty,timestamp:Date.now()
   });
-
   showToast(`${currentCard.name} [${currentPrint.printId}] ${rarity} ${mode==='in'?'+':'-'}${currentQty}장 → ${newQty}장`);
-  closeSheet();
-  renderLog();
+  closeSheet();renderLog();
 });
 
 /* ==========================================================================
-   검색
+   검색 (YGOPRODECK API)
    ========================================================================== */
-document.getElementById('searchInput').addEventListener('input', renderSearch);
+let searchTimer=null;
+document.getElementById('searchInput').addEventListener('input',()=>{
+  clearTimeout(searchTimer);
+  searchTimer=setTimeout(doSearch,400);
+});
 
-function renderSearch(){
+async function doSearch(){
   const q=document.getElementById('searchInput').value.trim();
-  const cards=DB.getCards();
-  const inv=DB.getInventory();
-  const matched=q?cards.filter(c=>c.name.includes(q)):cards;
-
-  if(!matched.length){
-    document.getElementById('searchResults').innerHTML='<div class="empty">검색 결과가 없어</div>';
-    return;
+  const el=document.getElementById('searchResults');
+  if(!q){el.innerHTML='';return;}
+  el.innerHTML='<div class="empty">검색 중...</div>';
+  try{
+    const cards=await searchByName(q);
+    renderSearchResults(cards);
+  }catch(e){
+    el.innerHTML='<div class="empty">검색 오류 — 네트워크를 확인해줘</div>';
   }
+}
 
-  document.getElementById('searchResults').innerHTML=matched.map(card=>{
-    const printRows=card.prints.map(p=>{
+function renderSearchResults(cards){
+  const inv=DB.getInventory();
+  const el=document.getElementById('searchResults');
+  if(!cards.length){el.innerHTML='<div class="empty">검색 결과가 없어</div>';return;}
+  el.innerHTML=cards.slice(0,30).map(card=>{
+    const prints=parsePrints(card);
+    const mainImg=card.card_images?.[0]?.image_url_small||'';
+    const printRows=prints.map((p,pi)=>{
       const badges=p.rarities.map(r=>{
-        const key=p.printId+'||'+r;
-        const qty=inv[key]?.quantity||0;
+        const qty=inv[p.printId+'||'+r]?.quantity||0;
         return `<span class="rarity-badge ${qty===0?'zero':''}">${r}<span class="bqty">${qty}장</span></span>`;
       }).join('');
-      return `
-        <div class="print-row">
-          <div class="print-thumb">${p.printId.split('-')[0]}</div>
-          <div class="print-info">
-            <div class="print-code">${p.printId}</div>
-            <div class="print-illust">${p.illustLabel}</div>
-            <div class="rarity-badges">${badges}</div>
-          </div>
-        </div>`;
+      const thumb=p.imageUrl?`<img class="print-thumb" src="${p.imageUrl}" loading="lazy">`
+        :`<div class="print-thumb" style="background:linear-gradient(155deg,var(--violet),#2a2150)"></div>`;
+      return `<div class="print-row">${thumb}<div class="print-info">
+        <div class="print-code">${p.printId}</div>
+        <div class="print-illust">${p.illustLabel}</div>
+        <div class="rarity-badges">${badges}</div>
+      </div></div>`;
     }).join('');
-
-    return `
-      <div class="card-group">
-        <div class="group-header">
+    return `<div class="card-group">
+      <div class="group-header">
+        ${mainImg?`<img src="${mainImg}" alt="${card.name}">`:''}
+        <div>
           <div class="group-name">${card.name}</div>
-          <span style="font-size:11px;color:var(--text-dim)">${card.prints.length}가지 인쇄판</span>
+          <div style="font-size:11px;color:var(--text-dim)">${card.type||''} · ${prints.length}가지 인쇄판</div>
         </div>
-        ${printRows}
-      </div>`;
+      </div>${printRows}</div>`;
   }).join('');
 }
 
@@ -605,25 +733,22 @@ function renderSearch(){
    ========================================================================== */
 function renderLog(){
   const tx=DB.getTx();
-  if(!tx.length){
-    document.getElementById('logList').innerHTML='<div class="empty">아직 거래 기록이 없어</div>';
-    return;
-  }
-  document.getElementById('logList').innerHTML=tx.map(t=>{
+  const el=document.getElementById('logList');
+  if(!tx.length){el.innerHTML='<div class="empty">아직 거래 기록이 없어</div>';return;}
+  el.innerHTML=tx.map(t=>{
     const time=new Date(t.timestamp).toLocaleString('ko-KR',{month:'numeric',day:'numeric',hour:'2-digit',minute:'2-digit'});
-    return `
-      <div class="log-row">
-        <div>
-          <span class="tag ${t.type}">${t.type==='in'?'입고':'출고'}</span>${t.cardName} ${t.amount}장
-          <div class="log-sub">${t.printId} · ${t.illustLabel} · ${t.rarity} → 잔여 ${t.resultQty}장</div>
-        </div>
-        <div class="log-time">${time}</div>
-      </div>`;
+    return `<div class="log-row">
+      <div>
+        <span class="tag ${t.type}">${t.type==='in'?'입고':'출고'}</span>${t.cardName} ${t.amount}장
+        <div class="log-sub">${t.printId} · ${t.rarity} → 잔여 ${t.resultQty}장</div>
+      </div>
+      <div class="log-time">${time}</div>
+    </div>`;
   }).join('');
 }
 
 /* ==========================================================================
-   탭
+   탭 / 토스트
    ========================================================================== */
 document.querySelectorAll('.tab-btn').forEach(btn=>{
   btn.addEventListener('click',()=>{
@@ -631,24 +756,18 @@ document.querySelectorAll('.tab-btn').forEach(btn=>{
     btn.classList.add('active');
     document.querySelectorAll('.screen').forEach(s=>s.classList.remove('active'));
     document.getElementById('screen-'+btn.dataset.screen).classList.add('active');
-    if(btn.dataset.screen==='search') renderSearch();
     if(btn.dataset.screen==='log') renderLog();
   });
 });
 
-/* ==========================================================================
-   토스트
-   ========================================================================== */
 const toastEl=document.getElementById('toast');
 let toastTimer=null;
 function showToast(msg){
-  toastEl.textContent=msg;
-  toastEl.classList.add('show');
+  toastEl.textContent=msg;toastEl.classList.add('show');
   clearTimeout(toastTimer);
-  toastTimer=setTimeout(()=>toastEl.classList.remove('show'),2400);
+  toastTimer=setTimeout(()=>toastEl.classList.remove('show'),2600);
 }
 
-renderSearch();
 renderLog();
 </script>
 </body>
