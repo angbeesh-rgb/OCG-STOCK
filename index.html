@@ -182,6 +182,12 @@ select.rarity{
 .rarity-badge .bqty{color:var(--gold-bright);font-weight:800;margin-left:4px;}
 .rarity-badge.zero{opacity:.35;}
 .empty{text-align:center;color:var(--text-dim);font-size:13px;padding:30px 0;}
+.sb-btn{
+  border:none;border-radius:7px;font-size:11px;font-weight:800;
+  padding:5px 9px;cursor:pointer;white-space:nowrap;
+}
+.sb-in{background:rgba(95,191,127,.18);color:var(--ok);border:1px solid rgba(95,191,127,.3);}
+.sb-out{background:rgba(199,92,92,.18);color:var(--danger);border:1px solid rgba(199,92,92,.3);}
 
 /* Log */
 .log-row{
@@ -586,7 +592,9 @@ function setMode(m){
    ========================================================================== */
 let currentCard=null,currentPrint=null,currentQty=1,currentPrints=[];
 
-function openSheet(card,prints,detectedPrintId){
+let _fromSearch=false;
+function openSheet(card,prints,detectedPrintId,fromSearch=false){
+  _fromSearch=fromSearch;
   currentCard=card; currentPrints=prints; currentQty=1;
 
   // 헤더 이미지
@@ -644,10 +652,12 @@ function selectPrint(p){
   });
 }
 
-function closeSheet(){
+function closeSheet(fromSearch=false){
   document.getElementById('overlay').classList.remove('show');
   overlayOpen=false; currentCard=null; currentPrint=null;
-  startCooldown(2500);
+  if(!fromSearch) startCooldown(2500);
+  // 검색 결과 재렌더 (재고 수량 업데이트 반영)
+  if(fromSearch) doSearch();
 }
 
 document.getElementById('qtyPlus').addEventListener('click',()=>{
@@ -656,7 +666,7 @@ document.getElementById('qtyPlus').addEventListener('click',()=>{
 document.getElementById('qtyMinus').addEventListener('click',()=>{
   currentQty=Math.max(1,currentQty-1);document.getElementById('qtyVal').textContent=currentQty;
 });
-document.getElementById('cancelBtn').addEventListener('click',closeSheet);
+document.getElementById('cancelBtn').addEventListener('click',()=>closeSheet(_fromSearch));
 
 document.getElementById('confirmBtn').addEventListener('click',()=>{
   if(!currentCard||!currentPrint) return;
@@ -672,7 +682,7 @@ document.getElementById('confirmBtn').addEventListener('click',()=>{
     type:mode,amount:currentQty,resultQty:newQty,timestamp:Date.now()
   });
   showToast(`${currentCard.name} [${currentPrint.printId}] ${rarity} ${mode==='in'?'+':'-'}${currentQty}장 → ${newQty}장`);
-  closeSheet();renderLog();
+  closeSheet(_fromSearch);renderLog();
 });
 
 /* ==========================================================================
@@ -697,12 +707,15 @@ async function doSearch(){
   }
 }
 
+const _searchCardMap = {};
 function renderSearchResults(cards){
   const inv=DB.getInventory();
   const el=document.getElementById('searchResults');
   if(!cards.length){el.innerHTML='<div class="empty">검색 결과가 없어</div>';return;}
-  el.innerHTML=cards.slice(0,30).map(card=>{
+  Object.keys(_searchCardMap).forEach(k=>delete _searchCardMap[k]);
+  el.innerHTML=cards.slice(0,30).map((card,ci)=>{
     const prints=parsePrints(card);
+    _searchCardMap[ci]={card,prints};
     const mainImg=card.card_images?.[0]?.image_url_small||'';
     const printRows=prints.map((p,pi)=>{
       const badges=p.rarities.map(r=>{
@@ -711,11 +724,18 @@ function renderSearchResults(cards){
       }).join('');
       const thumb=p.imageUrl?`<img class="print-thumb" src="${p.imageUrl}" loading="lazy">`
         :`<div class="print-thumb" style="background:linear-gradient(155deg,var(--violet),#2a2150)"></div>`;
-      return `<div class="print-row">${thumb}<div class="print-info">
-        <div class="print-code">${p.printId}</div>
-        <div class="print-illust">${p.illustLabel}</div>
-        <div class="rarity-badges">${badges}</div>
-      </div></div>`;
+      return `<div class="print-row">
+        ${thumb}
+        <div class="print-info">
+          <div class="print-code">${p.printId}</div>
+          <div class="print-illust">${p.illustLabel}</div>
+          <div class="rarity-badges">${badges}</div>
+        </div>
+        <div style="display:flex;flex-direction:column;gap:5px;flex-shrink:0">
+          <button class="sb-btn sb-in" data-ci="${ci}" data-pi="${pi}">＋입고</button>
+          <button class="sb-btn sb-out" data-ci="${ci}" data-pi="${pi}">－출고</button>
+        </div>
+      </div>`;
     }).join('');
     return `<div class="card-group">
       <div class="group-header">
@@ -726,6 +746,14 @@ function renderSearchResults(cards){
         </div>
       </div>${printRows}</div>`;
   }).join('');
+  el.querySelectorAll('.sb-btn').forEach(btn=>{
+    btn.addEventListener('click',()=>{
+      const {ci,pi}=btn.dataset;
+      const {card,prints}=_searchCardMap[ci];
+      setMode(btn.classList.contains('sb-in')?'in':'out');
+      openSheet(card,prints,prints[pi].printId,true);
+    });
+  });
 }
 
 /* ==========================================================================
