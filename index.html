@@ -188,6 +188,13 @@ select.rarity{
 }
 .sb-in{background:rgba(95,191,127,.18);color:var(--ok);border:1px solid rgba(95,191,127,.3);}
 .sb-out{background:rgba(199,92,92,.18);color:var(--danger);border:1px solid rgba(199,92,92,.3);}
+.manual-input{
+  width:100%;padding:12px 14px;border-radius:10px;background:var(--panel-2);
+  border:1px solid var(--line);color:var(--text);font-size:14px;
+  margin-bottom:4px;outline:none;
+}
+.manual-input::placeholder{color:var(--text-dim);}
+.manual-input:focus{border-color:var(--gold);}
 
 /* Log */
 .log-row{
@@ -296,6 +303,32 @@ nav.tabbar button.active{color:var(--gold-bright);}
   </div>
 </div>
 
+<div class="overlay" id="manualOverlay">
+  <div class="sheet">
+    <div style="font-size:15px;font-weight:800;color:var(--gold-bright);margin-bottom:4px;">카드 직접 등록</div>
+    <div style="font-size:12px;color:var(--text-dim);margin-bottom:16px;">
+      두 DB에서 찾지 못했어. 카드 정보를 직접 입력하면 앱에 저장돼서 다음엔 바로 인식돼.
+    </div>
+
+    <div class="field-label">인식된 카드번호</div>
+    <div id="manualCodeLabel" style="font-size:14px;font-weight:700;color:var(--gold-bright);margin-bottom:14px;padding:10px 12px;background:var(--panel-2);border-radius:8px;border:1px solid var(--line);"></div>
+
+    <div class="field-label">카드명</div>
+    <input class="manual-input" id="manualCardName" placeholder="예: 블랙 매지션" type="text">
+
+    <div class="field-label">인쇄판 라벨</div>
+    <input class="manual-input" id="manualIllustLabel" placeholder="예: 쿼터센츄리 아트컬렉션 (QCAC-KR)">
+
+    <div class="field-label">레어도 <span style="font-size:10px;color:var(--text-dim);font-weight:400">(쉼표로 구분)</span></div>
+    <input class="manual-input" id="manualRarities" placeholder="예: 울트라레어, 시크릿레어, 쿼터센츄리 시크릿레어">
+
+    <div class="sheet-actions">
+      <button class="btn-cancel" id="manualCancelBtn">취소</button>
+      <button class="btn-confirm in" id="manualSaveBtn">등록 후 입출고</button>
+    </div>
+  </div>
+</div>
+
 <div class="toast" id="toast"></div>
 
 <nav class="tabbar">
@@ -331,6 +364,19 @@ const DB = {
     const tx=this.getTx();
     tx.unshift(entry);
     this.write(this.TX,tx.slice(0,300));
+  },
+
+  // 수동 등록 커스텀 카드 (YGOPRODECK/Yugipedia 둘 다 없는 경우)
+  CUSTOM_KEY:'ocg_custom_cards',
+  getCustomCards(){ return this.read(this.CUSTOM_KEY,{}); },
+  saveCustomCard(printId, entry){
+    const c=this.getCustomCards();
+    c[printId]=entry;
+    this.write(this.CUSTOM_KEY,c);
+  },
+  findCustomByCode(code){
+    const c=this.getCustomCards();
+    return c[code]||null;
   }
 };
 
@@ -389,6 +435,83 @@ function collectRarities(sets, code){
   const r=[];
   sets.forEach(s=>{ if(s.set_code===code&&!r.includes(s.set_rarity)) r.push(s.set_rarity); });
   return r.length ? r : ['Normal'];
+}
+
+/* ==========================================================================
+   Yugipedia API (YGOPRODECK 폴백)
+   MediaWiki SMW ask → 카드번호로 카드명/타입 조회
+   ========================================================================== */
+async function fetchFromYugipedia(code){
+  try{
+    // 1차: SMW ask — 카드번호 직접 조회
+    const askUrl='https://yugipedia.com/api.php?action=ask&format=json&origin=*&query='+
+      encodeURIComponent(`[[Card number::${code}]]|?English name|?Korean name|?Card type|?Primary type`);
+    const askRes=await fetch(askUrl,{signal:AbortSignal.timeout(7000)});
+    if(askRes.ok){
+      const d=await askRes.json();
+      const items=Object.values(d?.query?.results||{});
+      if(items.length){
+        const p=items[0].printouts||{};
+        const name=p['Korean name']?.[0]||p['English name']?.[0];
+        if(name){
+          const type=p['Primary type']?.[0]?.fulltext||p['Card type']?.[0]?.fulltext||'';
+          return buildYugipediaCard(name,type,code);
+        }
+      }
+    }
+
+    // 2차: 텍스트 검색 → 카드 페이지 SMW 조회
+    const srUrl='https://yugipedia.com/api.php?action=query&list=search&srsearch='+
+      encodeURIComponent(code)+'&srlimit=5&format=json&origin=*';
+    const srRes=await fetch(srUrl,{signal:AbortSignal.timeout(7000)});
+    if(srRes.ok){
+      const sd=await srRes.json();
+      const hits=sd?.query?.search||[];
+      // 세트 목록 페이지 제외, 순수 카드 페이지 우선
+      const cardHit=hits.find(h=>!h.title.includes(':'))||hits[0];
+      if(cardHit&&!cardHit.title.startsWith('Set Card Lists')){
+        const propUrl='https://yugipedia.com/api.php?action=ask&format=json&origin=*&query='+
+          encodeURIComponent(`[[${cardHit.title}]]|?English name|?Korean name|?Card type|?Primary type`);
+        const pRes=await fetch(propUrl,{signal:AbortSignal.timeout(7000)});
+        if(pRes.ok){
+          const pd=await pRes.json();
+          const items=Object.values(pd?.query?.results||{});
+          if(items.length){
+            const p=items[0].printouts||{};
+            const name=p['Korean name']?.[0]||p['English name']?.[0]||cardHit.title;
+            const type=p['Primary type']?.[0]?.fulltext||'';
+            return buildYugipediaCard(name,type,code);
+          }
+        }
+        return buildYugipediaCard(cardHit.title,'',code);
+      }
+    }
+    return null;
+  }catch(e){
+    console.warn('Yugipedia error:',e);
+    return null;
+  }
+}
+
+function buildYugipediaCard(name,type,code){
+  // QCAC-KR001 → 세트명 추출
+  const setLabel=code.replace(/-[A-Z]{0,2}\d+$/,'')||code;
+  return {
+    name, type, fromYugipedia:true,
+    card_sets:[{set_code:code, set_name:`(Yugipedia) ${setLabel}`, set_rarity:'Ultra Rare'}],
+    card_images:[]
+  };
+}
+
+// 커스텀 카드(수동 등록)를 openSheet 호환 구조로 변환
+function buildCustomCard(entry){
+  return {
+    name:entry.cardName, type:'',
+    fromCustom:true,
+    card_sets:[{set_code:entry.printId, set_name:entry.illustLabel, set_rarity:entry.rarities[0]}],
+    card_images:[],
+    _customRarities:entry.rarities
+  };
 }
 
 /* ==========================================================================
@@ -543,18 +666,31 @@ async function captureAndRecognize(){
     camStatus.textContent=`인식됨: ${code} — API 조회 중...`;
     setOcrStatus(`카드번호: ${code} 조회 중...`);
 
-    const cardData = await fetchByCode(code);
+    // ── 1차: YGOPRODECK ──
+    let cardData = await fetchByCode(code);
+
+    // ── 2차: Yugipedia 폴백 ──
+    if(!cardData){
+      setOcrStatus(`YGOPRODECK 없음 → Yugipedia 조회 중...`);
+      cardData = await fetchFromYugipedia(code);
+    }
+
+    // ── 3차: 로컬 커스텀 카드 ──
+    if(!cardData){
+      const custom = DB.findCustomByCode(code);
+      if(custom) cardData = buildCustomCard(custom);
+    }
+
     setOcrStatus('');
 
+    // ── 전부 실패 → 수동 등록 시트 ──
     if(!cardData){
-      showToast(`${code} — DB에서 카드를 찾지 못했어`);
       camStatus.textContent='카드 하단 카드번호가 보이게 비춰줘';
-      startCooldown(2000);
+      openManualSheet(code);
       return;
     }
 
     const prints = parsePrints(cardData);
-    // 인식된 코드와 일치하는 인쇄판 우선 선택
     const detectedPrint = prints.find(p=>p.printId===code)||prints[0];
     openSheet(cardData, prints, detectedPrint.printId);
 
@@ -774,6 +910,54 @@ function renderLog(){
     </div>`;
   }).join('');
 }
+
+/* ==========================================================================
+   수동 등록 시트
+   ========================================================================== */
+let _manualCode='';
+const manualOverlay=document.getElementById('manualOverlay');
+
+function openManualSheet(code){
+  _manualCode=code;
+  document.getElementById('manualCodeLabel').textContent=code;
+  document.getElementById('manualCardName').value='';
+  document.getElementById('manualIllustLabel').value=code.replace(/-[A-Z]{0,2}\d+$/,'')||code;
+  document.getElementById('manualRarities').value='울트라레어';
+  manualOverlay.classList.add('show');
+  overlayOpen=true;
+  setTimeout(()=>document.getElementById('manualCardName').focus(),300);
+}
+
+function closeManualSheet(){
+  manualOverlay.classList.remove('show');
+  overlayOpen=false;
+  startCooldown(1500);
+}
+
+document.getElementById('manualCancelBtn').addEventListener('click', closeManualSheet);
+
+document.getElementById('manualSaveBtn').addEventListener('click',()=>{
+  const cardName=document.getElementById('manualCardName').value.trim();
+  const illustLabel=document.getElementById('manualIllustLabel').value.trim();
+  const raritiesRaw=document.getElementById('manualRarities').value.trim();
+  if(!cardName){ showToast('카드명을 입력해줘'); return; }
+
+  const rarities=raritiesRaw.split(',').map(r=>r.trim()).filter(Boolean);
+  if(!rarities.length){ showToast('레어도를 입력해줘'); return; }
+
+  // 커스텀 카드 저장
+  const entry={ cardName, printId:_manualCode, illustLabel:illustLabel||_manualCode, rarities };
+  DB.saveCustomCard(_manualCode, entry);
+
+  // 바로 입출고 모달로 연결
+  manualOverlay.classList.remove('show');
+  const cardObj=buildCustomCard(entry);
+  const prints=parsePrints(cardObj);
+  // 커스텀 카드는 수동 입력한 레어도 사용
+  prints[0].rarities=rarities;
+  openSheet(cardObj, prints, _manualCode);
+  showToast(`"${cardName}" 등록 완료 — 다음부터는 자동으로 인식돼`);
+});
 
 /* ==========================================================================
    탭 / 토스트
