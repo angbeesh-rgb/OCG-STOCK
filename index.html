@@ -576,9 +576,24 @@ document.getElementById('camStartBtn').addEventListener('click', async ()=>{
   document.getElementById('camStartBtn').textContent = 'OCR 초기화 중...';
   await initOCR();
   try{
-    const stream = await navigator.mediaDevices.getUserMedia({video:{facingMode:'environment',width:{ideal:1920},height:{ideal:1080}},audio:false});
+    const stream = await navigator.mediaDevices.getUserMedia({
+      video:{
+        facingMode:'environment',
+        width:{ideal:1920}, height:{ideal:1080},
+        focusMode:'continuous',          // 연속 자동초점 요청
+        advanced:[{focusMode:'continuous'}]
+      },
+      audio:false
+    });
     video.srcObject = stream;
     await video.play();
+
+    // 스트림 연결 후 트랙에 직접 연속 자동초점 적용 (더 확실)
+    const track = stream.getVideoTracks()[0];
+    const caps = track.getCapabilities?.() || {};
+    if(caps.focusMode?.includes('continuous')){
+      await track.applyConstraints({ advanced:[{focusMode:'continuous'}] });
+    }
     document.getElementById('camStartBtn').style.display='none';
     camStatus.textContent='카드 하단 카드번호가 보이게 비춰줘';
     detecting=true;
