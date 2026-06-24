@@ -195,6 +195,15 @@ select.rarity{
 }
 .manual-input::placeholder{color:var(--text-dim);}
 .manual-input:focus{border-color:var(--gold);}
+.focus-ring{
+  position:absolute;width:60px;height:60px;border:2px solid var(--gold-bright);
+  border-radius:50%;pointer-events:none;transform:translate(-50%,-50%);
+  animation:focusAnim .6s ease-out forwards;
+}
+@keyframes focusAnim{
+  0%{opacity:1;transform:translate(-50%,-50%) scale(1.4);}
+  100%{opacity:0;transform:translate(-50%,-50%) scale(1);}
+}
 
 /* Log */
 .log-row{
@@ -243,7 +252,7 @@ nav.tabbar button.active{color:var(--gold-bright);}
 
 <main>
   <section class="screen active" id="screen-cam">
-    <div class="cam-wrap">
+    <div class="cam-wrap" id="camWrap">
       <video id="video" playsinline muted></video>
       <canvas id="shot"></canvas>
       <canvas id="ocr-preview"></canvas>
@@ -573,6 +582,16 @@ const ring = document.getElementById('ring');
 const ocrStatusEl = document.getElementById('ocrStatus');
 const cooldownBar = document.getElementById('cooldownBar');
 
+function showFocusRing(x, y){
+  const wrap = document.getElementById('camWrap');
+  const ring = document.createElement('div');
+  ring.className = 'focus-ring';
+  ring.style.left = x + 'px';
+  ring.style.top  = y + 'px';
+  wrap.appendChild(ring);
+  setTimeout(() => ring.remove(), 650);
+}
+
 function setOcrStatus(msg){
   if(msg){ ocrStatusEl.textContent=msg; ocrStatusEl.classList.add('show'); }
   else ocrStatusEl.classList.remove('show');
@@ -637,14 +656,47 @@ document.getElementById('camStartBtn').addEventListener('click', async ()=>{
       const defaultZoom = Math.min(caps.zoom.max, Math.max(caps.zoom.min, 2));
       zoomSlider.value = defaultZoom;
       zoomLabel.textContent = defaultZoom.toFixed(1) + 'x';
-      await track.applyConstraints({ advanced:[{zoom: defaultZoom}] });
+      // 초점+줌 함께 적용 (별도 호출하면 초점 설정이 덮어씌워짐)
+      await track.applyConstraints({ advanced:[
+        {focusMode:'continuous', zoom: defaultZoom}
+      ]});
 
       zoomSlider.addEventListener('input', async ()=>{
         const z = parseFloat(zoomSlider.value);
         zoomLabel.textContent = z.toFixed(1) + 'x';
-        await track.applyConstraints({ advanced:[{zoom: z}] });
+        await track.applyConstraints({ advanced:[
+          {focusMode:'continuous', zoom: z}
+        ]});
       });
     }
+
+    // 3초마다 continuous autofocus 재트리거 (일부 Android 필요)
+    setInterval(async ()=>{
+      if(!_videoTrack) return;
+      try{
+        await _videoTrack.applyConstraints({ advanced:[{focusMode:'single-shot'}] });
+        await _videoTrack.applyConstraints({ advanced:[{focusMode:'continuous'}] });
+      }catch(e){}
+    }, 3000);
+
+    // 탭투포커스 — 탭한 위치로 초점 이동
+    document.getElementById('camWrap').addEventListener('click', async (e)=>{
+      if(!_videoTrack) return;
+      const rect = e.currentTarget.getBoundingClientRect();
+      const x = (e.clientX - rect.left) / rect.width;
+      const y = (e.clientY - rect.top)  / rect.height;
+      try{
+        await _videoTrack.applyConstraints({ advanced:[
+          {pointOfInterest:{x, y}, focusMode:'single-shot'}
+        ]});
+        // 0.8초 후 continuous로 복귀
+        setTimeout(async ()=>{
+          try{ await _videoTrack.applyConstraints({ advanced:[{focusMode:'continuous'}] }); }catch(e){}
+        }, 800);
+        // 탭 위치에 포커스 링 표시
+        showFocusRing(e.clientX - rect.left, e.clientY - rect.top);
+      }catch(e){}
+    });
     document.getElementById('camStartBtn').style.display='none';
     camStatus.textContent='카드 하단 카드번호가 보이게 비춰줘';
     detecting=true;
