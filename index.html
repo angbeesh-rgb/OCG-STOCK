@@ -251,6 +251,7 @@ nav.tabbar button.active{color:var(--gold-bright);}
       <div class="progress-ring" id="ring"></div>
       <div class="ocr-status" id="ocrStatus"></div>
       <div class="cam-status" id="camStatus">카메라를 시작해줘</div>
+      <div id="resDebug" style="position:absolute;top:6px;left:8px;font-size:10px;color:var(--gold-bright);background:rgba(0,0,0,.55);padding:2px 7px;border-radius:4px;pointer-events:none;"></div>
     </div>
     <div class="cooldown-bar" id="cooldownBar"><div class="cooldown-fill" id="cooldownFill"></div></div>
     <div id="zoomWrap" style="display:none;align-items:center;gap:10px;margin-top:10px;">
@@ -581,17 +582,34 @@ document.getElementById('camStartBtn').addEventListener('click', async ()=>{
   document.getElementById('camStartBtn').textContent = 'OCR 초기화 중...';
   await initOCR();
   try{
-    const stream = await navigator.mediaDevices.getUserMedia({
+    // 사용 가능한 카메라 목록에서 후면 카메라 deviceId 직접 가져오기
+    // (facingMode만으론 저화질 카메라가 선택될 수 있음)
+    const devices = await navigator.mediaDevices.enumerateDevices();
+    const videoDevices = devices.filter(d => d.kind === 'videoinput');
+    // 후면 카메라는 보통 마지막 항목 (전면이 첫번째인 경우 많음)
+    const rearDevice = videoDevices.find(d => d.label.toLowerCase().includes('back') ||
+      d.label.toLowerCase().includes('rear') || d.label.toLowerCase().includes('0')) ||
+      videoDevices[videoDevices.length - 1];
+
+    const constraints = {
       video:{
-        facingMode:'environment',
-        width:{ideal:3840}, height:{ideal:2160}, // 4K 우선 요청
+        deviceId: rearDevice?.deviceId ? { exact: rearDevice.deviceId } : undefined,
+        facingMode: rearDevice ? undefined : { exact:'environment' },
+        width:{ ideal:3840 }, height:{ ideal:2160 },
         focusMode:'continuous',
         advanced:[{focusMode:'continuous'}]
       },
       audio:false
-    });
+    };
+
+    const stream = await navigator.mediaDevices.getUserMedia(constraints);
     video.srcObject = stream;
     await video.play();
+
+    // 실제 해상도 확인 (디버그)
+    const settings = stream.getVideoTracks()[0].getSettings();
+    const resInfo = `${settings.width}×${settings.height}`;
+    document.getElementById('resDebug').textContent = `📐 ${resInfo}`;
 
     // 트랙 직접 제어 — 초점 + 줌
     const track = stream.getVideoTracks()[0];
@@ -610,7 +628,7 @@ document.getElementById('camStartBtn').addEventListener('click', async ()=>{
       zoomSlider.min = caps.zoom.min;
       zoomSlider.max = Math.min(caps.zoom.max, 8);
       zoomSlider.step = caps.zoom.step || 0.1;
-      const defaultZoom = Math.min(caps.zoom.max, Math.max(caps.zoom.min, 2)); // 기본 2x
+      const defaultZoom = Math.min(caps.zoom.max, Math.max(caps.zoom.min, 2));
       zoomSlider.value = defaultZoom;
       zoomLabel.textContent = defaultZoom.toFixed(1) + 'x';
       await track.applyConstraints({ advanced:[{zoom: defaultZoom}] });
