@@ -253,6 +253,11 @@ nav.tabbar button.active{color:var(--gold-bright);}
       <div class="cam-status" id="camStatus">카메라를 시작해줘</div>
     </div>
     <div class="cooldown-bar" id="cooldownBar"><div class="cooldown-fill" id="cooldownFill"></div></div>
+    <div id="zoomWrap" style="display:none;align-items:center;gap:10px;margin-top:10px;">
+      <span style="font-size:12px;color:var(--text-dim);white-space:nowrap">🔍 줌</span>
+      <input type="range" id="zoomSlider" style="flex:1;accent-color:var(--gold-bright);">
+      <span id="zoomLabel" style="font-size:12px;color:var(--gold-bright);font-weight:700;min-width:32px;">2x</span>
+    </div>
     <div class="cam-tip">
       카드를 가이드 박스에 맞추고 <b>하단 카드번호가 잘 보이게</b> 비춰줘.<br>
       가만히 있으면 자동으로 인식돼. 촬영된 이미지는 저장되지 않아.
@@ -579,8 +584,8 @@ document.getElementById('camStartBtn').addEventListener('click', async ()=>{
     const stream = await navigator.mediaDevices.getUserMedia({
       video:{
         facingMode:'environment',
-        width:{ideal:1920}, height:{ideal:1080},
-        focusMode:'continuous',          // 연속 자동초점 요청
+        width:{ideal:3840}, height:{ideal:2160}, // 4K 우선 요청
+        focusMode:'continuous',
         advanced:[{focusMode:'continuous'}]
       },
       audio:false
@@ -588,11 +593,33 @@ document.getElementById('camStartBtn').addEventListener('click', async ()=>{
     video.srcObject = stream;
     await video.play();
 
-    // 스트림 연결 후 트랙에 직접 연속 자동초점 적용 (더 확실)
+    // 트랙 직접 제어 — 초점 + 줌
     const track = stream.getVideoTracks()[0];
     const caps = track.getCapabilities?.() || {};
+
     if(caps.focusMode?.includes('continuous')){
       await track.applyConstraints({ advanced:[{focusMode:'continuous'}] });
+    }
+
+    // 디지털 줌 지원 시 슬라이더 표시
+    if(caps.zoom){
+      const zoomWrap = document.getElementById('zoomWrap');
+      const zoomSlider = document.getElementById('zoomSlider');
+      const zoomLabel = document.getElementById('zoomLabel');
+      zoomWrap.style.display = 'flex';
+      zoomSlider.min = caps.zoom.min;
+      zoomSlider.max = Math.min(caps.zoom.max, 8);
+      zoomSlider.step = caps.zoom.step || 0.1;
+      const defaultZoom = Math.min(caps.zoom.max, Math.max(caps.zoom.min, 2)); // 기본 2x
+      zoomSlider.value = defaultZoom;
+      zoomLabel.textContent = defaultZoom.toFixed(1) + 'x';
+      await track.applyConstraints({ advanced:[{zoom: defaultZoom}] });
+
+      zoomSlider.addEventListener('input', async ()=>{
+        const z = parseFloat(zoomSlider.value);
+        zoomLabel.textContent = z.toFixed(1) + 'x';
+        await track.applyConstraints({ advanced:[{zoom: z}] });
+      });
     }
     document.getElementById('camStartBtn').style.display='none';
     camStatus.textContent='카드 하단 카드번호가 보이게 비춰줘';
@@ -650,25 +677,44 @@ async function captureAndRecognize(){
   const guideH = guideW/0.685;
   const gx=(vw-guideW)/2, gy=(vh-guideH)/2;
   // 카드번호는 하단 15% 영역
-  const cropH=guideH*0.15;
+  const cropH=guideH*0.20;  // 20%로 확대 (카드번호 + 여유분)
   const cropY=gy+guideH-cropH;
 
   // OCR용 캔버스 — 해상도 높여서 인식률 향상
   const oc=document.createElement('canvas');
-  const scale=3; // 3배 업스케일
+  const scale=4; // 4배 업스케일
   oc.width=guideW*scale; oc.height=cropH*scale;
   const octx=oc.getContext('2d');
-  // 전처리: 명도/대비 높이기
-  octx.filter='contrast(2) brightness(1.3) grayscale(1)';
+
+  // 1차: 원본 그리기
   octx.drawImage(video,gx,cropY,guideW,cropH,0,0,oc.width,oc.height);
+
+  // 2차: 이진화(흑백 강제) — 픽셀 직접 처리
+  const imgData=octx.getImageData(0,0,oc.width,oc.height);
+  const d=imgData.data;
+  for(let i=0;i<d.length;i+=4){
+    // 그레이스케일 변환
+    const gray=d[i]*0.299+d[i+1]*0.587+d[i+2]*0.114;
+    // 적응형 임계값 — 밝으면 흰색, 어두우면 검정
+    const bin=gray>128?255:0;
+    d[i]=d[i+1]=d[i+2]=bin; d[i+3]=255;
+  }
+  octx.putImageData(imgData,0,0);
+
+  // 3차: 대비/샤프닝 필터 추가 적용
+  const oc2=document.createElement('canvas');
+  oc2.width=oc.width; oc2.height=oc.height;
+  const octx2=oc2.getContext('2d');
+  octx2.filter='contrast(3) sharpen(2)';
+  octx2.drawImage(oc,0,0);
 
   // 미리보기 캔버스에 표시 (디버깅용)
   const pc=ocrCanvas.getContext('2d');
-  ocrCanvas.width=oc.width; ocrCanvas.height=oc.height;
-  pc.drawImage(oc,0,0);
+  ocrCanvas.width=oc2.width; ocrCanvas.height=oc2.height;
+  pc.drawImage(oc2,0,0);
 
   try{
-    const code = await runOCR(oc);
+    const code = await runOCR(oc2);
     ring.classList.remove('spin');
 
     if(!code){
