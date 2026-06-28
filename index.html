@@ -187,6 +187,11 @@ select.rarity{
 }
 .sb-in{background:rgba(95,191,127,.18);color:var(--ok);border:1px solid rgba(95,191,127,.3);}
 .sb-out{background:rgba(199,92,92,.18);color:var(--danger);border:1px solid rgba(199,92,92,.3);}
+.candidate-row{
+  display:flex;align-items:center;gap:12px;padding:10px;border-radius:10px;
+  cursor:pointer;border:1px solid var(--line);margin-bottom:8px;background:var(--panel-2);
+}
+.candidate-row:active{background:rgba(201,162,75,.1);border-color:var(--gold-bright);}
 .manual-input{
   width:100%;padding:12px 14px;border-radius:10px;background:var(--panel-2);
   border:1px solid var(--line);color:var(--text);font-size:14px;
@@ -267,6 +272,16 @@ nav.tabbar button.active{color:var(--gold-bright);}
       <input type="range" id="zoomSlider" style="flex:1;accent-color:var(--gold-bright);">
       <span id="zoomLabel" style="font-size:12px;color:var(--gold-bright);font-weight:700;min-width:32px;">2x</span>
     </div>
+    <!-- Vision API 사용량 표시 -->
+    <div style="margin-top:12px;background:var(--panel);border:1px solid var(--line);border-radius:10px;padding:10px 12px;">
+      <div style="display:flex;justify-content:space-between;align-items:center;margin-bottom:6px;">
+        <span style="font-size:11px;color:var(--text-dim);">이번 달 Vision API 사용량</span>
+        <span id="usageText" style="font-size:11px;font-weight:800;color:var(--gold-bright);">0 / 1000회</span>
+      </div>
+      <div style="height:4px;background:var(--panel-2);border-radius:999px;overflow:hidden;">
+        <div id="usageBar" style="height:100%;width:0%;background:var(--gold-bright);border-radius:999px;transition:.3s;"></div>
+      </div>
+    </div>
     <div class="cam-tip">
       카드를 가이드 박스에 맞추고 <b>하단 카드번호가 잘 보이게</b> 비춰줘.<br>
       가만히 있으면 자동으로 인식돼. 촬영된 이미지는 저장되지 않아.
@@ -341,9 +356,18 @@ nav.tabbar button.active{color:var(--gold-bright);}
       <button class="btn-confirm in" id="manualSaveBtn">등록 후 입출고</button>
     </div>
   </div>
-</div>
 
 <div class="toast" id="toast"></div>
+<div class="overlay" id="candidateOverlay">
+  <div class="sheet">
+    <div style="font-size:15px;font-weight:800;color:var(--gold-bright);margin-bottom:4px;">카드 선택</div>
+    <div style="font-size:12px;color:var(--text-dim);margin-bottom:14px;">인식된 카드명과 비슷한 카드야. 맞는 카드 선택해줘.</div>
+    <div id="candidateList"></div>
+    <div class="sheet-actions" style="margin-top:14px;">
+      <button class="btn-cancel" id="candidateCancelBtn">취소</button>
+    </div>
+  </div>
+</div>
 
 <nav class="tabbar">
   <button class="tab-btn active" data-screen="cam">📷 인식</button>
@@ -380,7 +404,20 @@ const DB = {
     this.write(this.TX,tx.slice(0,300));
   },
 
-  // 수동 등록 커스텀 카드 (YGOPRODECK/Yugipedia 둘 다 없는 경우)
+  // Vision API 월별 사용량 카운터
+  USAGE_KEY: 'ocg_vision_usage',
+  getUsage(){
+    const d = this.read(this.USAGE_KEY, {});
+    const ym = new Date().toISOString().slice(0,7); // "2026-06"
+    return { count: d[ym] || 0, ym };
+  },
+  addUsage(){
+    const d = this.read(this.USAGE_KEY, {});
+    const ym = new Date().toISOString().slice(0,7);
+    d[ym] = (d[ym] || 0) + 1;
+    this.write(this.USAGE_KEY, d);
+    return d[ym];
+  },
   CUSTOM_KEY:'ocg_custom_cards',
   getCustomCards(){ return this.read(this.CUSTOM_KEY,{}); },
   saveCustomCard(printId, entry){
@@ -538,7 +575,14 @@ const CODE_REGEX = /[A-Z]{2,6}-[A-Z]{0,2}\d{2,4}/g;
 const KO_NAME_LINES = /^[가-힣\s·\-]{2,20}$/;
 
 async function runVisionOCR(canvas){
-  setOcrStatus('Google Vision 분석 중...');
+  // 월 1000회 한도 체크
+  const { count, ym } = DB.getUsage();
+  const LIMIT = 1000;
+  if(count >= LIMIT){
+    throw new Error(`이번 달 Vision API 한도(${LIMIT}회)를 초과했어. 다음 달에 다시 사용 가능해.`);
+  }
+
+  setOcrStatus(`Google Vision 분석 중... (이번 달 ${count+1}/${LIMIT}회)`);
   // Vision API용으로 800px로 리사이즈 (원본 4K는 너무 커서 전송 실패 가능)
   const resized = document.createElement('canvas');
   const maxW = 800;
@@ -547,6 +591,8 @@ async function runVisionOCR(canvas){
   resized.height = Math.round(canvas.height * ratio);
   resized.getContext('2d').drawImage(canvas, 0, 0, resized.width, resized.height);
   const base64 = resized.toDataURL('image/jpeg', 0.85).split(',')[1];
+  // 디버그 이미지 표시
+  document.getElementById('dbgImg') && (document.getElementById('dbgImg').src = 'data:image/jpeg;base64,' + base64);
 
   const res = await fetch(WORKER_URL, {
     method: 'POST',
@@ -557,6 +603,11 @@ async function runVisionOCR(canvas){
 
   if(!res.ok) throw new Error('Worker 응답 오류: ' + res.status);
   const { text } = await res.json();
+
+  // 성공 시 카운터 증가
+  const newCount = DB.addUsage();
+  updateUsageDisplay(newCount);
+
   setOcrStatus('');
 
   // 디버그 — Vision 인식 결과 토스트로 표시
@@ -601,6 +652,15 @@ function showFocusRing(x, y){
   ring.style.top  = y + 'px';
   wrap.appendChild(ring);
   setTimeout(() => ring.remove(), 650);
+}
+
+function updateUsageDisplay(count){
+  const LIMIT = 1000;
+  const pct = Math.min(count / LIMIT * 100, 100);
+  document.getElementById('usageText').textContent = `${count} / ${LIMIT}회`;
+  const bar = document.getElementById('usageBar');
+  bar.style.width = pct + '%';
+  bar.style.background = pct >= 90 ? 'var(--danger)' : pct >= 70 ? 'var(--gold-bright)' : 'var(--ok)';
 }
 
 function setOcrStatus(msg){
@@ -773,27 +833,45 @@ async function captureAndRecognize(){
   ocrCanvas.width = oc.width; ocrCanvas.height = oc.height;
   pc.drawImage(oc, 0, 0);
 
+  // 디버그 — 리사이즈된 이미지를 img 태그로 화면에 표시
+  let dbgImg = document.getElementById('dbgImg');
+  if(!dbgImg){
+    dbgImg = document.createElement('img');
+    dbgImg.id = 'dbgImg';
+    dbgImg.style.cssText = 'position:fixed;bottom:90px;left:0;width:100%;z-index:99;border:2px solid red;';
+    document.body.appendChild(dbgImg);
+  }
+
   try{
     const { code, name } = await runVisionOCR(oc);
     ring.classList.remove('spin');
 
-    // ── 카드번호로 조회 ──
+    // ── 카드명으로 우선 검색 ──
     let cardData = null;
-    if(code){
-      camStatus.textContent = `카드번호: ${code} 조회 중...`;
-      cardData = await fetchByCode(code);
-      if(!cardData){
-        setOcrStatus('YGOPRODECK 없음 → Yugipedia 조회 중...');
-        cardData = await fetchFromYugipedia(code);
+
+    if(name){
+      camStatus.textContent = `"${name}" 검색 중...`;
+      setOcrStatus(`"${name}" 검색 중...`);
+      const results = await searchByName(name);
+      if(results.length === 1){
+        // 결과 하나면 바로 확정
+        cardData = results[0];
+      } else if(results.length > 1){
+        // 여러 개면 선택 목록 표시
+        setOcrStatus('');
+        openCandidateSheet(results, code);
+        return;
       }
     }
 
-    // ── 카드명으로 조회 (카드번호 실패 시) ──
-    if(!cardData && name){
-      camStatus.textContent = `카드명: ${name} 검색 중...`;
-      setOcrStatus(`"${name}" 검색 중...`);
-      const results = await searchByName(name);
-      if(results.length > 0) cardData = results[0];
+    // ── 카드명 실패 시 카드번호로 폴백 ──
+    if(!cardData && code){
+      camStatus.textContent = `카드번호: ${code} 조회 중...`;
+      cardData = await fetchByCode(code);
+      if(!cardData){
+        setOcrStatus('Yugipedia 조회 중...');
+        cardData = await fetchFromYugipedia(code);
+      }
     }
 
     // ── 로컬 커스텀 카드 ──
@@ -1032,6 +1110,45 @@ function renderLog(){
 }
 
 /* ==========================================================================
+   후보 카드 선택 시트
+   ========================================================================== */
+const candidateOverlay = document.getElementById('candidateOverlay');
+
+function openCandidateSheet(cards, detectedCode){
+  overlayOpen = true;
+  const list = document.getElementById('candidateList');
+  list.innerHTML = cards.slice(0,8).map((card,i) => {
+    const img = card.card_images?.[0]?.image_url_small || '';
+    return `<div class="candidate-row" data-i="${i}">
+      ${img ? `<img src="${img}" class="print-thumb">` : '<div class="print-thumb"></div>'}
+      <div class="print-info">
+        <div style="font-weight:700;font-size:14px;">${card.name}</div>
+        <div style="font-size:11px;color:var(--text-dim)">${card.type||''}</div>
+      </div>
+    </div>`;
+  }).join('');
+
+  list.querySelectorAll('.candidate-row').forEach(row => {
+    row.addEventListener('click', () => {
+      const card = cards[parseInt(row.dataset.i)];
+      candidateOverlay.classList.remove('show');
+      overlayOpen = false;
+      const prints = parsePrints(card);
+      const detectedPrint = prints.find(p => p.printId === detectedCode) || prints[0];
+      openSheet(card, prints, detectedPrint.printId);
+    });
+  });
+
+  candidateOverlay.classList.add('show');
+}
+
+document.getElementById('candidateCancelBtn').addEventListener('click', () => {
+  candidateOverlay.classList.remove('show');
+  overlayOpen = false;
+  startCooldown(1500);
+});
+
+/* ==========================================================================
    수동 등록 시트
    ========================================================================== */
 let _manualCode='';
@@ -1101,6 +1218,7 @@ function showToast(msg){
 }
 
 renderLog();
+updateUsageDisplay(DB.getUsage().count);
 </script>
 </body>
 </html>
