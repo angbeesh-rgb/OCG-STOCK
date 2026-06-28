@@ -539,8 +539,14 @@ const KO_NAME_LINES = /^[가-힣\s·\-]{2,20}$/;
 
 async function runVisionOCR(canvas){
   setOcrStatus('Google Vision 분석 중...');
-  // canvas → base64 (카드 전체 영역)
-  const base64 = canvas.toDataURL('image/jpeg', 0.92).split(',')[1];
+  // Vision API용으로 800px로 리사이즈 (원본 4K는 너무 커서 전송 실패 가능)
+  const resized = document.createElement('canvas');
+  const maxW = 800;
+  const ratio = maxW / oc.width;
+  resized.width = maxW;
+  resized.height = Math.round(oc.height * ratio);
+  resized.getContext('2d').drawImage(oc, 0, 0, resized.width, resized.height);
+  const base64 = resized.toDataURL('image/jpeg', 0.85).split(',')[1];
 
   const res = await fetch(WORKER_URL, {
     method: 'POST',
