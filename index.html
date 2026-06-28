@@ -552,6 +552,10 @@ async function runVisionOCR(canvas){
   if(!res.ok) throw new Error('Worker 응답 오류: ' + res.status);
   const { text } = await res.json();
   setOcrStatus('');
+
+  // 디버그 — Vision 인식 결과 토스트로 표시
+  showToast('Vision 결과: ' + (text ? text.slice(0,40).replace(/\n/g,' ') : '(없음)'));
+
   if(!text) return { code: null, name: null };
 
   // 카드번호 추출
