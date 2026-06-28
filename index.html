@@ -591,8 +591,6 @@ async function runVisionOCR(canvas){
   resized.height = Math.round(canvas.height * ratio);
   resized.getContext('2d').drawImage(canvas, 0, 0, resized.width, resized.height);
   const base64 = resized.toDataURL('image/jpeg', 0.85).split(',')[1];
-  // 디버그 이미지 표시
-  document.getElementById('dbgImg') && (document.getElementById('dbgImg').src = 'data:image/jpeg;base64,' + base64);
 
   const res = await fetch(WORKER_URL, {
     method: 'POST',
@@ -609,10 +607,6 @@ async function runVisionOCR(canvas){
   updateUsageDisplay(newCount);
 
   setOcrStatus('');
-
-  // 디버그 — Vision 인식 결과 토스트로 표시
-  showToast('Vision 결과: ' + (text ? text.slice(0,40).replace(/\n/g,' ') : '(없음)'));
-
   if(!text) return { code: null, name: null };
 
   // 카드번호 추출
@@ -832,15 +826,6 @@ async function captureAndRecognize(){
   const pc = ocrCanvas.getContext('2d');
   ocrCanvas.width = oc.width; ocrCanvas.height = oc.height;
   pc.drawImage(oc, 0, 0);
-
-  // 디버그 — 리사이즈된 이미지를 img 태그로 화면에 표시
-  let dbgImg = document.getElementById('dbgImg');
-  if(!dbgImg){
-    dbgImg = document.createElement('img');
-    dbgImg.id = 'dbgImg';
-    dbgImg.style.cssText = 'position:fixed;bottom:90px;left:0;width:100%;z-index:99;border:2px solid red;';
-    document.body.appendChild(dbgImg);
-  }
 
   try{
     const { code, name } = await runVisionOCR(oc);
