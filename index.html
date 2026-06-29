@@ -405,8 +405,8 @@
   <div class="app">
     <header>
       <div>
-        <h1>말로 등록하는 유희왕 재고</h1>
-        <p class="subtitle">카드명, 레어도, 수량, 상태를 말하면 재고 초안으로 변환합니다.</p>
+        <h1>음성인식 OCG 재고관리</h1>
+        <p class="subtitle">카드명과 레어도를 말하면 재고 초안으로 변환합니다.</p>
       </div>
     </header>
 
@@ -414,9 +414,6 @@
       <div class="section">
         <div class="section-head">
           <h2>음성 등록</h2>
-          <div class="row">
-            <button class="primary" id="saveBtn" type="button">재고 반영</button>
-          </div>
         </div>
         <div class="body">
           <div class="voice-pad">
@@ -426,7 +423,7 @@
                 <span id="micLabel">말하기</span>
               </span>
             </button>
-            <textarea id="transcript" placeholder="예: 푸른 눈의 백룡 시크릿 레어 세 장 니어민트 추가"></textarea>
+            <textarea id="transcript" placeholder="예: 푸른 눈의 백룡 시크릿 레어 세 장 추가"></textarea>
           </div>
 
           <div class="suggestions" id="suggestions"></div>
@@ -436,37 +433,34 @@
               <input id="cardName" list="cardNames" autocomplete="off">
               <datalist id="cardNames"></datalist>
             </label>
-            <label>액션
-              <select id="action">
-                <option value="add">추가</option>
-                <option value="remove">차감</option>
-                <option value="sold">판매</option>
-              </select>
-            </label>
             <label>레어도
               <select id="rarity"></select>
             </label>
             <label>수량
               <input id="quantity" type="number" min="1" value="1">
             </label>
-            <label>상태
-              <select id="condition">
-                <option value="NM">NM</option>
-                <option value="LP">LP</option>
-                <option value="MP">MP</option>
-                <option value="HP">HP</option>
-                <option value="DMG">DMG</option>
-              </select>
-            </label>
-            <label>언어
-              <select id="language">
-                <option value="KR">한국어</option>
-                <option value="JP">일본어</option>
-                <option value="EN">영어</option>
-              </select>
-            </label>
           </div>
+
+          <!-- 숨김 처리 (파싱 로직 유지용) -->
+          <select id="action" style="display:none">
+            <option value="add">추가</option>
+            <option value="remove">차감</option>
+            <option value="sold">판매</option>
+          </select>
+          <select id="condition" style="display:none">
+            <option value="NM">NM</option>
+          </select>
+          <select id="language" style="display:none">
+            <option value="KR">한국어</option>
+          </select>
+
           <div class="status" id="status"></div>
+
+          <!-- 입출고 버튼 -->
+          <div style="display:flex;gap:10px;margin-top:14px;">
+            <button class="primary" id="addBtn" type="button" style="flex:1;background:var(--green);">＋ 입고</button>
+            <button class="primary" id="removeBtn" type="button" style="flex:1;background:var(--red);">－ 출고</button>
+          </div>
         </div>
 
         <div class="section-head">
@@ -482,8 +476,6 @@
               <tr>
                 <th>카드명</th>
                 <th>레어도</th>
-                <th>상태</th>
-                <th>언어</th>
                 <th>수량</th>
                 <th>최근 변경</th>
                 <th></th>
@@ -501,6 +493,69 @@
   <script>
     const SpeechRecognition = window.SpeechRecognition || window.webkitSpeechRecognition;
     const storageKey = "ygoVoiceInventory.v1";
+    const YGO_API = "https://db.ygoprodeck.com/api/v7/cardinfo.php";
+
+    // YGOPRODECK에서 카드명으로 인쇄판/레어도 조회
+    async function fetchCardPrints(name) {
+      try {
+        const res = await fetch(`${YGO_API}?fname=${encodeURIComponent(name)}&language=ko`);
+        if (!res.ok) return null;
+        const data = await res.json();
+        const card = data.data?.[0];
+        if (!card || !card.card_sets) return null;
+
+        // 레어도 중복 제거
+        const rarities = [...new Set(card.card_sets.map(s => s.set_rarity))];
+        const imageUrl = card.card_images?.[0]?.image_url_small || null;
+        return { name: card.name, rarities, imageUrl, sets: card.card_sets };
+      } catch(e) {
+        return null;
+      }
+    }
+
+    // 카드명 확정 시 YGOPRODECK에서 레어도 자동 조회
+    async function updateRarityFromAPI(cardName) {
+      if (!cardName) return;
+      setStatus(`"${cardName}" 인쇄판 정보 조회 중...`);
+      const result = await fetchCardPrints(cardName);
+      if (result && result.rarities.length) {
+        const sel = $("rarity");
+        sel.innerHTML = "";
+        result.rarities.forEach(r => {
+          const opt = document.createElement("option");
+          opt.value = r; opt.textContent = r;
+          sel.appendChild(opt);
+        });
+        // 카드 이미지 표시
+        if (result.imageUrl) {
+          let img = $("cardPreviewImg");
+          if (!img) {
+            img = document.createElement("img");
+            img.id = "cardPreviewImg";
+            img.style.cssText = "width:72px;height:100px;object-fit:cover;border-radius:6px;border:1px solid var(--line);flex-shrink:0;";
+            const pad = document.querySelector(".voice-pad");
+            pad.insertBefore(img, pad.firstChild);
+          }
+          img.src = result.imageUrl;
+          img.alt = cardName;
+        }
+        setStatus(`"${cardName}" — ${result.rarities.length}가지 레어도 로드됨. 맞으면 재고에 반영하세요.`);
+      } else {
+        // API에 없으면 기본 하드코딩 목록으로 폴백
+        resetRarityOptions();
+        setStatus(`"${cardName}" — DB에서 인쇄판 정보를 찾지 못했어. 레어도를 직접 선택해줘.`);
+      }
+    }
+
+    function resetRarityOptions() {
+      const sel = $("rarity");
+      sel.innerHTML = "";
+      rarityOptions.forEach(r => {
+        const opt = document.createElement("option");
+        opt.value = r; opt.textContent = r;
+        sel.appendChild(opt);
+      });
+    }
 
     const cards = [
       "푸른 눈의 백룡",
@@ -668,12 +723,7 @@
     const $ = (id) => document.getElementById(id);
 
     function init() {
-      rarityOptions.forEach((rarity) => {
-        const option = document.createElement("option");
-        option.value = rarity;
-        option.textContent = rarity;
-        $("rarity").appendChild(option);
-      });
+      resetRarityOptions();
 
       cards.forEach((card) => {
         const option = document.createElement("option");
@@ -682,11 +732,19 @@
       });
 
       $("micBtn").addEventListener("click", toggleMic);
-      $("saveBtn").addEventListener("click", saveParsed);
+      $("addBtn").addEventListener("click", () => { $("action").value = "add"; saveParsed(); });
+      $("removeBtn").addEventListener("click", () => { $("action").value = "remove"; saveParsed(); });
       $("transcript").addEventListener("input", parseTranscript);
       $("search").addEventListener("input", renderInventory);
       $("clearBtn").addEventListener("click", clearInventory);
-      $("cardName").addEventListener("input", updateSuggestions);
+      $("cardName").addEventListener("input", () => {
+        updateSuggestions();
+        clearTimeout(window._cardNameTimer);
+        window._cardNameTimer = setTimeout(() => {
+          const name = $("cardName").value.trim();
+          if (name) updateRarityFromAPI(name);
+        }, 600);
+      });
 
       setupSpeech();
       renderInventory();
@@ -856,7 +914,12 @@
       $("cardName").value = cardName;
 
       updateSuggestions(candidates);
-      setStatus(cardName ? `가장 가까운 후보는 "${cardName}"입니다. 맞으면 재고에 반영하세요.` : "카드명을 찾지 못했습니다. 아래 후보를 선택하거나 카드명을 직접 입력하세요.");
+
+      if (cardName) {
+        updateRarityFromAPI(cardName);
+      } else {
+        setStatus("카드명을 찾지 못했습니다. 아래 후보를 선택하거나 카드명을 직접 입력하세요.");
+      }
     }
 
     function findAlias(text, groups) {
@@ -928,6 +991,7 @@
         button.addEventListener("click", () => {
           $("cardName").value = button.dataset.card;
           updateSuggestions();
+          updateRarityFromAPI(button.dataset.card);
         });
       });
     }
@@ -1076,8 +1140,6 @@
         <tr>
           <td><strong>${escapeHtml(item.cardName)}</strong></td>
           <td><span class="badge ${isHighRarity(item.rarity) ? "gold" : ""}">${escapeHtml(item.rarity)}</span></td>
-          <td>${escapeHtml(item.condition)}</td>
-          <td>${escapeHtml(item.language)}</td>
           <td class="qty">${item.quantity}</td>
           <td>${formatDate(item.updatedAt)}</td>
           <td>
