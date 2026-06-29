@@ -1,1209 +1,1036 @@
-<!DOCTYPE html>
+<!doctype html>
 <html lang="ko">
 <head>
-<meta charset="UTF-8">
-<meta name="viewport" content="width=device-width, initial-scale=1, viewport-fit=cover">
-<title>듀얼 스톡 — OCG 카드 재고</title>
-<link href="https://fonts.googleapis.com/css2?family=Noto+Sans+KR:wght@400;500;700;900&family=Cinzel:wght@600;800&display=swap" rel="stylesheet">
-<style>
-:root{
-  --ink:#0c0e16;--panel:#14172a;--panel-2:#1c2038;
-  --gold:#c9a24b;--gold-bright:#e8c873;--violet:#6a4fb0;
-  --text:#eef0f6;--text-dim:#9aa0b8;
-  --danger:#c75c5c;--ok:#5fbf7f;
-  --line:rgba(201,162,75,0.22);--radius:14px;
-}
-*{box-sizing:border-box;-webkit-tap-highlight-color:transparent;}
-html,body{height:100%;}
-body{
-  margin:0;
-  background:radial-gradient(1200px 600px at 50% -10%,rgba(106,79,176,.25),transparent 60%),var(--ink);
-  color:var(--text);font-family:'Noto Sans KR',sans-serif;
-  display:flex;flex-direction:column;min-height:100vh;overflow-x:hidden;
-}
-.cinzel{font-family:'Cinzel',serif;letter-spacing:.04em;}
+  <meta charset="utf-8">
+  <meta name="viewport" content="width=device-width, initial-scale=1">
+  <title>유희왕 음성 재고 관리</title>
+  <style>
+    :root {
+      color-scheme: light;
+      --ink: #18212f;
+      --muted: #667085;
+      --line: #d7dee9;
+      --panel: #ffffff;
+      --soft: #f5f7fb;
+      --brand: #2563eb;
+      --brand-dark: #1d4ed8;
+      --green: #178a54;
+      --red: #c2413b;
+      --gold: #b58117;
+      --shadow: 0 18px 45px rgba(24, 33, 47, .12);
+    }
 
-header.app{
-  padding:18px 18px 14px;display:flex;align-items:center;justify-content:space-between;
-  border-bottom:1px solid var(--line);
-  background:linear-gradient(180deg,rgba(28,32,56,.9),rgba(12,14,22,.4));
-  position:sticky;top:0;z-index:20;backdrop-filter:blur(6px);
-}
-header.app h1{font-size:18px;margin:0;font-weight:800;color:var(--gold-bright);}
-header.app .eyebrow{font-size:10px;letter-spacing:.2em;color:var(--text-dim);text-transform:uppercase;margin-bottom:2px;}
-.mode-toggle{display:flex;background:var(--panel-2);border-radius:999px;padding:3px;border:1px solid var(--line);}
-.mode-toggle button{
-  border:none;background:transparent;color:var(--text-dim);font-weight:700;font-size:13px;
-  padding:7px 14px;border-radius:999px;cursor:pointer;transition:.2s;
-}
-.mode-toggle button.active.in{background:var(--ok);color:#0c1a10;}
-.mode-toggle button.active.out{background:var(--danger);color:#1a0c0c;}
+    * {
+      box-sizing: border-box;
+    }
 
-main{flex:1;padding:16px;padding-bottom:90px;max-width:520px;margin:0 auto;width:100%;}
-.screen{display:none;}
-.screen.active{display:block;}
+    body {
+      margin: 0;
+      font-family: ui-sans-serif, system-ui, -apple-system, BlinkMacSystemFont, "Segoe UI", sans-serif;
+      color: var(--ink);
+      background:
+        linear-gradient(180deg, rgba(255,255,255,.9), rgba(245,247,251,.96)),
+        radial-gradient(circle at 15% 0%, rgba(37,99,235,.16), transparent 34%),
+        radial-gradient(circle at 86% 12%, rgba(181,129,23,.13), transparent 30%),
+        #f5f7fb;
+      min-height: 100vh;
+      letter-spacing: 0;
+    }
 
-/* Camera */
-.cam-wrap{
-  position:relative;width:100%;aspect-ratio:3/4;border-radius:var(--radius);overflow:hidden;
-  background:#000;border:1px solid var(--line);
-}
-video{width:100%;height:100%;object-fit:cover;display:block;}
-canvas#shot{display:none;}
-canvas#ocr-preview{
-  position:absolute;bottom:0;left:0;width:100%;height:18%;
-  opacity:0.35;pointer-events:none;
-}
-.guide{position:absolute;inset:0;display:flex;align-items:center;justify-content:center;pointer-events:none;}
-.guide-box{
-  width:70%;aspect-ratio:.685;border:2.5px dashed var(--gold);border-radius:10px;
-  box-shadow:0 0 0 9999px rgba(0,0,0,.45);transition:border-color .15s;
-  position:relative;
-}
-.guide-box.stable{border-color:var(--ok);border-style:solid;}
-/* 카드번호 영역 표시 */
-.guide-box::after{
-  content:'카드번호';font-size:9px;color:var(--gold-bright);letter-spacing:.1em;
-  position:absolute;bottom:6%;left:50%;transform:translateX(-50%);
-  background:rgba(0,0,0,.55);padding:2px 7px;border-radius:4px;
-  border:1px dashed var(--gold-bright);white-space:nowrap;
-}
+    button, input, select, textarea {
+      font: inherit;
+    }
 
-.cam-status{
-  position:absolute;bottom:10px;left:0;right:0;text-align:center;
-  font-size:12px;color:var(--text-dim);pointer-events:none;
-  text-shadow:0 1px 4px rgba(0,0,0,.8);
-}
-.ocr-status{
-  position:absolute;top:10px;left:10px;right:10px;
-  background:rgba(12,14,22,.75);border:1px solid var(--line);border-radius:8px;
-  padding:6px 10px;font-size:11px;color:var(--gold-bright);display:none;
-  text-align:center;backdrop-filter:blur(3px);
-}
-.ocr-status.show{display:block;}
-.progress-ring{
-  position:absolute;top:10px;right:10px;width:36px;height:36px;border-radius:50%;
-  border:3px solid rgba(255,255,255,.15);border-top-color:var(--gold-bright);display:none;
-}
-.progress-ring.spin{display:block;animation:spin .8s linear infinite;}
-@keyframes spin{to{transform:rotate(360deg);}}
-.cam-tip{margin-top:12px;font-size:13px;color:var(--text-dim);text-align:center;line-height:1.6;}
-.cam-tip b{color:var(--gold-bright);font-weight:700;}
-.cam-start{
-  margin-top:14px;width:100%;padding:14px;border-radius:12px;border:none;
-  background:linear-gradient(135deg,var(--gold),var(--violet));color:#0c0e16;
-  font-weight:800;font-size:15px;cursor:pointer;
-}
-.cooldown-bar{
-  height:3px;background:var(--panel-2);border-radius:999px;margin-top:10px;overflow:hidden;display:none;
-}
-.cooldown-bar.show{display:block;}
-.cooldown-fill{height:100%;background:var(--gold-bright);width:100%;
-  animation:cooldown 2.5s linear forwards;}
-@keyframes cooldown{from{width:100%}to{width:0%}}
+    button {
+      border: 0;
+      cursor: pointer;
+    }
 
-/* Modal */
-.overlay{
-  position:fixed;inset:0;background:rgba(5,6,12,.75);backdrop-filter:blur(4px);
-  display:none;align-items:flex-end;justify-content:center;z-index:50;
-}
-.overlay.show{display:flex;}
-.sheet{
-  width:100%;max-width:520px;background:var(--panel);border-radius:18px 18px 0 0;
-  border:1px solid var(--line);border-bottom:none;padding:20px;animation:up .22s ease-out;
-  max-height:90vh;overflow-y:auto;
-}
-@keyframes up{from{transform:translateY(30px);opacity:0;}to{transform:translateY(0);opacity:1;}}
-.sheet-head{display:flex;gap:12px;align-items:flex-start;margin-bottom:16px;}
-.card-img{
-  width:60px;height:83px;border-radius:6px;flex-shrink:0;
-  object-fit:cover;border:1px solid var(--line);background:var(--panel-2);
-}
-.card-img-placeholder{
-  width:60px;height:83px;border-radius:6px;flex-shrink:0;
-  background:linear-gradient(155deg,var(--violet),#2a2150);
-  display:flex;align-items:center;justify-content:center;
-  font-size:10px;color:var(--text-dim);border:1px solid var(--line);text-align:center;padding:4px;
-}
-.sheet-head .name{font-weight:800;font-size:16px;margin-bottom:4px;}
-.sheet-head .meta{font-size:12px;color:var(--text-dim);line-height:1.5;}
-.field-label{font-size:11px;color:var(--gold-bright);letter-spacing:.1em;text-transform:uppercase;margin:14px 0 8px;}
+    .app {
+      width: min(1180px, calc(100% - 32px));
+      margin: 0 auto;
+      padding: 24px 0 40px;
+    }
 
-.illust-grid{display:grid;grid-template-columns:repeat(3,1fr);gap:8px;}
-.illust-card{
-  background:var(--panel-2);border:2px solid var(--line);border-radius:10px;
-  padding:6px;cursor:pointer;text-align:center;transition:.15s;
-}
-.illust-card.selected{border-color:var(--gold-bright);background:rgba(201,162,75,.1);}
-.illust-card img{width:100%;aspect-ratio:.685;object-fit:cover;border-radius:4px;margin-bottom:4px;}
-.illust-card .ic-placeholder{
-  width:100%;aspect-ratio:.685;border-radius:4px;margin-bottom:4px;
-  background:linear-gradient(155deg,var(--violet),#2a2150);
-  display:flex;align-items:center;justify-content:center;font-size:8px;color:var(--text-dim);
-}
-.illust-card .ic-code{font-size:9px;color:var(--gold-bright);font-weight:700;}
-.illust-card .ic-label{font-size:9px;color:var(--text-dim);margin-top:2px;line-height:1.2;}
+    header {
+      display: flex;
+      align-items: flex-end;
+      justify-content: space-between;
+      gap: 18px;
+      padding: 10px 0 22px;
+    }
 
-select.rarity{
-  width:100%;padding:12px;border-radius:10px;background:var(--panel-2);
-  border:1px solid var(--line);color:var(--text);font-size:14px;font-weight:600;
-}
-.stepper{display:flex;align-items:center;gap:14px;justify-content:center;margin-top:6px;}
-.stepper button{
-  width:44px;height:44px;border-radius:50%;border:1px solid var(--line);
-  background:var(--panel-2);color:var(--gold-bright);font-size:22px;font-weight:800;cursor:pointer;
-}
-.stepper .qty{font-size:26px;font-weight:800;min-width:46px;text-align:center;}
-.sheet-actions{display:flex;gap:10px;margin-top:20px;}
-.sheet-actions button{flex:1;padding:13px;border-radius:10px;border:none;font-weight:800;font-size:14px;cursor:pointer;}
-.btn-cancel{background:var(--panel-2);color:var(--text-dim);border:1px solid var(--line)!important;}
-.btn-confirm.in{background:var(--ok);color:#0c1a10;}
-.btn-confirm.out{background:var(--danger);color:#1a0c0c;}
+    h1 {
+      margin: 0;
+      font-size: clamp(28px, 4vw, 44px);
+      line-height: 1.05;
+      letter-spacing: 0;
+    }
 
-/* Search */
-.search-bar{display:flex;gap:8px;margin-bottom:14px;}
-.search-bar input{
-  flex:1;padding:13px 14px;border-radius:10px;background:var(--panel-2);
-  border:1px solid var(--line);color:var(--text);font-size:14px;
-}
-.card-group{background:var(--panel);border:1px solid var(--line);border-radius:12px;margin-bottom:12px;overflow:hidden;}
-.group-header{padding:12px 14px 10px;display:flex;align-items:center;gap:10px;border-bottom:1px solid var(--line);}
-.group-header img{width:36px;height:50px;object-fit:cover;border-radius:4px;flex-shrink:0;}
-.group-name{font-weight:800;font-size:14px;}
-.print-row{display:flex;align-items:center;gap:10px;padding:10px 14px;border-bottom:1px solid rgba(201,162,75,.1);}
-.print-row:last-child{border-bottom:none;}
-.print-thumb{width:32px;height:44px;border-radius:4px;flex-shrink:0;object-fit:cover;background:var(--panel-2);}
-.print-info{flex:1;}
-.print-code{font-size:11px;color:var(--gold-bright);font-weight:700;}
-.print-illust{font-size:11px;color:var(--text-dim);margin-top:1px;}
-.rarity-badges{display:flex;flex-wrap:wrap;gap:5px;margin-top:5px;}
-.rarity-badge{font-size:11px;padding:2px 8px;border-radius:999px;background:var(--panel-2);border:1px solid var(--line);}
-.rarity-badge .bqty{color:var(--gold-bright);font-weight:800;margin-left:4px;}
-.rarity-badge.zero{opacity:.35;}
-.empty{text-align:center;color:var(--text-dim);font-size:13px;padding:30px 0;}
-.sb-btn{
-  border:none;border-radius:7px;font-size:11px;font-weight:800;
-  padding:5px 9px;cursor:pointer;white-space:nowrap;
-}
-.sb-in{background:rgba(95,191,127,.18);color:var(--ok);border:1px solid rgba(95,191,127,.3);}
-.sb-out{background:rgba(199,92,92,.18);color:var(--danger);border:1px solid rgba(199,92,92,.3);}
-.candidate-row{
-  display:flex;align-items:center;gap:12px;padding:10px;border-radius:10px;
-  cursor:pointer;border:1px solid var(--line);margin-bottom:8px;background:var(--panel-2);
-}
-.candidate-row:active{background:rgba(201,162,75,.1);border-color:var(--gold-bright);}
-.manual-input{
-  width:100%;padding:12px 14px;border-radius:10px;background:var(--panel-2);
-  border:1px solid var(--line);color:var(--text);font-size:14px;
-  margin-bottom:4px;outline:none;
-}
-.manual-input::placeholder{color:var(--text-dim);}
-.manual-input:focus{border-color:var(--gold);}
-.focus-ring{
-  position:absolute;width:60px;height:60px;border:2px solid var(--gold-bright);
-  border-radius:50%;pointer-events:none;transform:translate(-50%,-50%);
-  animation:focusAnim .6s ease-out forwards;
-}
-@keyframes focusAnim{
-  0%{opacity:1;transform:translate(-50%,-50%) scale(1.4);}
-  100%{opacity:0;transform:translate(-50%,-50%) scale(1);}
-}
+    .subtitle {
+      margin: 10px 0 0;
+      color: var(--muted);
+      font-size: 15px;
+    }
 
-/* Log */
-.log-row{
-  display:flex;justify-content:space-between;align-items:flex-start;
-  padding:11px 0;border-bottom:1px solid var(--line);font-size:13px;gap:8px;
-}
-.log-row .tag{font-size:10px;font-weight:800;padding:3px 8px;border-radius:999px;margin-right:6px;white-space:nowrap;}
-.tag.in{background:rgba(95,191,127,.18);color:var(--ok);}
-.tag.out{background:rgba(199,92,92,.18);color:var(--danger);}
-.log-sub{font-size:11px;color:var(--text-dim);margin-top:2px;}
-.log-time{color:var(--text-dim);font-size:11px;white-space:nowrap;}
+    .stats {
+      display: grid;
+      grid-template-columns: repeat(3, minmax(88px, 1fr));
+      gap: 8px;
+      min-width: min(390px, 100%);
+    }
 
-.toast{
-  position:fixed;bottom:90px;left:50%;transform:translateX(-50%) translateY(20px);
-  background:var(--panel-2);border:1px solid var(--gold);color:var(--text);
-  padding:10px 18px;border-radius:999px;font-size:13px;font-weight:700;
-  opacity:0;transition:.25s;z-index:60;pointer-events:none;white-space:nowrap;max-width:90vw;
-  text-overflow:ellipsis;overflow:hidden;
-}
-.toast.show{opacity:1;transform:translateX(-50%) translateY(0);}
+    .stat {
+      background: rgba(255,255,255,.82);
+      border: 1px solid var(--line);
+      border-radius: 8px;
+      padding: 10px 12px;
+    }
 
-nav.tabbar{
-  position:fixed;bottom:0;left:0;right:0;background:var(--panel);
-  border-top:1px solid var(--line);display:flex;z-index:30;
-  padding-bottom:env(safe-area-inset-bottom);
-}
-nav.tabbar button{
-  flex:1;padding:12px 0 10px;background:none;border:none;color:var(--text-dim);
-  display:flex;flex-direction:column;align-items:center;gap:4px;font-size:11px;cursor:pointer;
-}
-nav.tabbar button.active{color:var(--gold-bright);}
-</style>
+    .stat strong {
+      display: block;
+      font-size: 22px;
+      line-height: 1;
+    }
+
+    .stat span {
+      display: block;
+      margin-top: 5px;
+      color: var(--muted);
+      font-size: 12px;
+    }
+
+    main {
+      display: grid;
+      grid-template-columns: minmax(0, 1fr) 390px;
+      gap: 18px;
+      align-items: start;
+    }
+
+    .section {
+      background: rgba(255,255,255,.9);
+      border: 1px solid var(--line);
+      border-radius: 8px;
+      box-shadow: var(--shadow);
+      overflow: hidden;
+    }
+
+    .section-head {
+      display: flex;
+      align-items: center;
+      justify-content: space-between;
+      gap: 12px;
+      padding: 16px;
+      border-bottom: 1px solid var(--line);
+      background: rgba(245,247,251,.72);
+    }
+
+    h2 {
+      margin: 0;
+      font-size: 17px;
+      line-height: 1.2;
+    }
+
+    .body {
+      padding: 16px;
+    }
+
+    .voice-pad {
+      display: grid;
+      grid-template-columns: 156px minmax(0, 1fr);
+      gap: 16px;
+      align-items: stretch;
+    }
+
+    .mic {
+      min-height: 156px;
+      border-radius: 8px;
+      background: var(--brand);
+      color: #fff;
+      display: grid;
+      place-items: center;
+      box-shadow: inset 0 -16px 36px rgba(0,0,0,.14);
+      transition: transform .12s ease, background .12s ease;
+    }
+
+    .mic:active {
+      transform: translateY(1px);
+    }
+
+    .mic.listening {
+      background: var(--red);
+    }
+
+    .mic-mark {
+      display: grid;
+      gap: 9px;
+      place-items: center;
+      font-weight: 800;
+      letter-spacing: 0;
+    }
+
+    .mic-symbol {
+      width: 52px;
+      height: 52px;
+      border-radius: 50%;
+      border: 3px solid currentColor;
+      display: grid;
+      place-items: center;
+      font-size: 27px;
+      line-height: 1;
+    }
+
+    textarea {
+      width: 100%;
+      min-height: 156px;
+      resize: vertical;
+      border: 1px solid var(--line);
+      border-radius: 8px;
+      padding: 14px;
+      color: var(--ink);
+      background: #fff;
+      outline: none;
+    }
+
+    textarea:focus, input:focus, select:focus {
+      border-color: var(--brand);
+      box-shadow: 0 0 0 3px rgba(37,99,235,.14);
+    }
+
+    .row {
+      display: flex;
+      gap: 8px;
+      flex-wrap: wrap;
+      align-items: center;
+    }
+
+    .examples {
+      margin-top: 14px;
+      display: flex;
+      gap: 8px;
+      flex-wrap: wrap;
+    }
+
+    .chip {
+      border: 1px solid var(--line);
+      background: #fff;
+      color: var(--ink);
+      border-radius: 999px;
+      padding: 8px 10px;
+      font-size: 13px;
+      max-width: 100%;
+    }
+
+    .primary, .secondary, .danger {
+      min-height: 40px;
+      border-radius: 8px;
+      padding: 0 14px;
+      font-weight: 700;
+      display: inline-flex;
+      align-items: center;
+      justify-content: center;
+      gap: 8px;
+      white-space: nowrap;
+    }
+
+    .primary {
+      background: var(--brand);
+      color: #fff;
+    }
+
+    .primary:hover {
+      background: var(--brand-dark);
+    }
+
+    .secondary {
+      background: #eef3fb;
+      color: var(--ink);
+      border: 1px solid var(--line);
+    }
+
+    .danger {
+      background: #fff1f0;
+      color: var(--red);
+      border: 1px solid #f3c4c0;
+    }
+
+    .parse-grid {
+      display: grid;
+      grid-template-columns: repeat(2, minmax(0, 1fr));
+      gap: 12px;
+      margin-top: 16px;
+    }
+
+    label {
+      display: grid;
+      gap: 7px;
+      color: var(--muted);
+      font-size: 13px;
+      font-weight: 700;
+    }
+
+    input, select {
+      width: 100%;
+      min-height: 42px;
+      border: 1px solid var(--line);
+      border-radius: 8px;
+      background: #fff;
+      padding: 0 11px;
+      color: var(--ink);
+      outline: none;
+    }
+
+    .suggestions {
+      margin-top: 10px;
+      display: flex;
+      gap: 8px;
+      flex-wrap: wrap;
+    }
+
+    .suggestion {
+      border: 1px solid #c8d7f5;
+      background: #f4f7ff;
+      color: var(--brand-dark);
+      border-radius: 999px;
+      padding: 7px 10px;
+      font-size: 13px;
+    }
+
+    .inventory-tools {
+      display: grid;
+      grid-template-columns: minmax(0, 1fr) 118px;
+      gap: 8px;
+    }
+
+    .table-wrap {
+      overflow: auto;
+    }
+
+    table {
+      width: 100%;
+      border-collapse: collapse;
+      min-width: 760px;
+    }
+
+    th, td {
+      padding: 12px 10px;
+      text-align: left;
+      border-bottom: 1px solid var(--line);
+      font-size: 14px;
+      vertical-align: middle;
+    }
+
+    th {
+      color: var(--muted);
+      font-size: 12px;
+      background: var(--soft);
+      position: sticky;
+      top: 0;
+      z-index: 1;
+    }
+
+    .qty {
+      width: 68px;
+      font-weight: 800;
+    }
+
+    .badge {
+      display: inline-flex;
+      align-items: center;
+      min-height: 26px;
+      border-radius: 999px;
+      padding: 0 9px;
+      background: #f4f7ff;
+      color: var(--brand-dark);
+      border: 1px solid #d9e4ff;
+      font-size: 12px;
+      font-weight: 700;
+      white-space: nowrap;
+    }
+
+    .badge.gold {
+      background: #fff8e8;
+      color: #7a520c;
+      border-color: #f1d79b;
+    }
+
+    .empty {
+      padding: 42px 16px;
+      text-align: center;
+      color: var(--muted);
+    }
+
+    .mini-actions {
+      display: flex;
+      gap: 6px;
+      justify-content: flex-end;
+    }
+
+    .icon-btn {
+      width: 34px;
+      height: 34px;
+      border-radius: 8px;
+      border: 1px solid var(--line);
+      background: #fff;
+      color: var(--ink);
+      display: inline-grid;
+      place-items: center;
+      font-weight: 900;
+    }
+
+    .status {
+      margin-top: 12px;
+      color: var(--muted);
+      font-size: 13px;
+      min-height: 19px;
+    }
+
+    .side-list {
+      display: grid;
+      gap: 10px;
+    }
+
+    .alias {
+      display: flex;
+      justify-content: space-between;
+      gap: 12px;
+      border-bottom: 1px solid var(--line);
+      padding: 8px 0;
+      font-size: 13px;
+    }
+
+    .alias:last-child {
+      border-bottom: 0;
+    }
+
+    .alias span {
+      color: var(--muted);
+      text-align: right;
+    }
+
+    @media (max-width: 920px) {
+      header, main {
+        display: grid;
+        grid-template-columns: 1fr;
+      }
+
+      .stats {
+        min-width: 0;
+      }
+    }
+
+    @media (max-width: 620px) {
+      .app {
+        width: min(100% - 20px, 1180px);
+        padding-top: 14px;
+      }
+
+      .voice-pad, .parse-grid, .inventory-tools {
+        grid-template-columns: 1fr;
+      }
+
+      .mic {
+        min-height: 112px;
+      }
+
+      .section-head {
+        align-items: stretch;
+        flex-direction: column;
+      }
+
+      .row {
+        width: 100%;
+      }
+
+      .primary, .secondary, .danger {
+        flex: 1 1 auto;
+      }
+    }
+  </style>
 </head>
 <body>
-
-<header class="app">
-  <div>
-    <div class="eyebrow">Duel Stock</div>
-    <h1 class="cinzel">카드 재고</h1>
-  </div>
-  <div class="mode-toggle">
-    <button id="modeInBtn" class="active in">입고</button>
-    <button id="modeOutBtn" class="out">출고</button>
-  </div>
-</header>
-
-<main>
-  <section class="screen active" id="screen-cam">
-    <div class="cam-wrap" id="camWrap">
-      <video id="video" playsinline muted></video>
-      <canvas id="shot"></canvas>
-      <canvas id="ocr-preview"></canvas>
-      <div class="guide"><div class="guide-box" id="guideBox"></div></div>
-      <div class="progress-ring" id="ring"></div>
-      <div class="ocr-status" id="ocrStatus"></div>
-      <div class="cam-status" id="camStatus">카메라를 시작해줘</div>
-      <div id="resDebug" style="position:absolute;top:6px;left:8px;font-size:10px;color:var(--gold-bright);background:rgba(0,0,0,.55);padding:2px 7px;border-radius:4px;pointer-events:none;"></div>
-    </div>
-    <div class="cooldown-bar" id="cooldownBar"><div class="cooldown-fill" id="cooldownFill"></div></div>
-    <div id="zoomWrap" style="display:none;align-items:center;gap:10px;margin-top:10px;">
-      <span style="font-size:12px;color:var(--text-dim);white-space:nowrap">🔍 줌</span>
-      <input type="range" id="zoomSlider" style="flex:1;accent-color:var(--gold-bright);">
-      <span id="zoomLabel" style="font-size:12px;color:var(--gold-bright);font-weight:700;min-width:32px;">2x</span>
-    </div>
-    <!-- Vision API 사용량 표시 -->
-    <div style="margin-top:12px;background:var(--panel);border:1px solid var(--line);border-radius:10px;padding:10px 12px;">
-      <div style="display:flex;justify-content:space-between;align-items:center;margin-bottom:6px;">
-        <span style="font-size:11px;color:var(--text-dim);">이번 달 Vision API 사용량</span>
-        <span id="usageText" style="font-size:11px;font-weight:800;color:var(--gold-bright);">0 / 1000회</span>
-      </div>
-      <div style="height:4px;background:var(--panel-2);border-radius:999px;overflow:hidden;">
-        <div id="usageBar" style="height:100%;width:0%;background:var(--gold-bright);border-radius:999px;transition:.3s;"></div>
-      </div>
-    </div>
-    <div class="cam-tip">
-      카드를 가이드 박스에 맞추고 <b>하단 카드번호가 잘 보이게</b> 비춰줘.<br>
-      가만히 있으면 자동으로 인식돼. 촬영된 이미지는 저장되지 않아.
-    </div>
-    <button class="cam-start" id="camStartBtn">카메라 시작</button>
-  </section>
-
-  <section class="screen" id="screen-search">
-    <div class="search-bar">
-      <input type="text" id="searchInput" placeholder="카드명으로 검색...">
-    </div>
-    <div id="searchResults"></div>
-  </section>
-
-  <section class="screen" id="screen-log">
-    <div id="logList"></div>
-  </section>
-</main>
-
-<div class="overlay" id="overlay">
-  <div class="sheet">
-    <div class="sheet-head">
-      <div id="modalImgWrap"></div>
+  <div class="app">
+    <header>
       <div>
-        <div class="name" id="modalName">-</div>
-        <div class="meta" id="modalMeta">-</div>
-        <div class="meta" id="modalMode" style="margin-top:4px;color:var(--gold-bright);">입고 처리</div>
+        <h1>말로 등록하는 유희왕 재고</h1>
+        <p class="subtitle">카드명, 레어도, 수량, 상태를 말하면 재고 초안으로 변환합니다.</p>
       </div>
-    </div>
+      <div class="stats" aria-label="재고 요약">
+        <div class="stat"><strong id="totalCards">0</strong><span>총 장수</span></div>
+        <div class="stat"><strong id="uniqueCards">0</strong><span>고유 항목</span></div>
+        <div class="stat"><strong id="rareCards">0</strong><span>고레어</span></div>
+      </div>
+    </header>
 
-    <div class="field-label">일러스트 / 인쇄판 선택</div>
-    <div class="illust-grid" id="illustGrid"></div>
+    <main>
+      <div class="section">
+        <div class="section-head">
+          <h2>음성 등록</h2>
+          <div class="row">
+            <button class="secondary" id="parseBtn" type="button">해석</button>
+            <button class="primary" id="saveBtn" type="button">재고 반영</button>
+          </div>
+        </div>
+        <div class="body">
+          <div class="voice-pad">
+            <button class="mic" id="micBtn" type="button" aria-label="음성 입력 시작">
+              <span class="mic-mark">
+                <span class="mic-symbol">●</span>
+                <span id="micLabel">말하기</span>
+              </span>
+            </button>
+            <textarea id="transcript" placeholder="예: 푸른 눈의 백룡 시크릿 레어 세 장 니어민트 추가"></textarea>
+          </div>
 
-    <div class="field-label">레어도</div>
-    <select class="rarity" id="raritySelect"></select>
+          <div class="examples">
+            <button class="chip" type="button" data-example="푸른 눈의 백룡 시크릿 레어 세 장 니어민트 추가">푸른 눈의 백룡 시크릿 레어 세 장</button>
+            <button class="chip" type="button" data-example="증식의 지 슈퍼 레어 두 장 판매">증식의 G 슈퍼 레어 두 장 판매</button>
+            <button class="chip" type="button" data-example="블랙 매지션 울트라 한 장 라이트 플레이드">블랙 매지션 울트라 한 장</button>
+          </div>
 
-    <div class="field-label">매수</div>
-    <div class="stepper">
-      <button id="qtyMinus">−</button>
-      <div class="qty" id="qtyVal">1</div>
-      <button id="qtyPlus">+</button>
-    </div>
+          <div class="parse-grid">
+            <label>카드명
+              <input id="cardName" list="cardNames" autocomplete="off">
+              <datalist id="cardNames"></datalist>
+            </label>
+            <label>액션
+              <select id="action">
+                <option value="add">추가</option>
+                <option value="remove">차감</option>
+                <option value="sold">판매</option>
+              </select>
+            </label>
+            <label>레어도
+              <select id="rarity"></select>
+            </label>
+            <label>수량
+              <input id="quantity" type="number" min="1" value="1">
+            </label>
+            <label>상태
+              <select id="condition">
+                <option value="NM">NM</option>
+                <option value="LP">LP</option>
+                <option value="MP">MP</option>
+                <option value="HP">HP</option>
+                <option value="DMG">DMG</option>
+              </select>
+            </label>
+            <label>언어
+              <select id="language">
+                <option value="KR">한국어</option>
+                <option value="JP">일본어</option>
+                <option value="EN">영어</option>
+              </select>
+            </label>
+          </div>
+          <div class="suggestions" id="suggestions"></div>
+          <div class="status" id="status"></div>
+        </div>
 
-    <div class="sheet-actions">
-      <button class="btn-cancel" id="cancelBtn">취소</button>
-      <button class="btn-confirm" id="confirmBtn">저장</button>
-    </div>
+        <div class="section-head">
+          <h2>재고 목록</h2>
+          <div class="inventory-tools">
+            <input id="search" placeholder="검색">
+            <button class="danger" id="clearBtn" type="button">초기화</button>
+          </div>
+        </div>
+        <div class="table-wrap">
+          <table>
+            <thead>
+              <tr>
+                <th>카드명</th>
+                <th>레어도</th>
+                <th>상태</th>
+                <th>언어</th>
+                <th>수량</th>
+                <th>최근 변경</th>
+                <th></th>
+              </tr>
+            </thead>
+            <tbody id="inventoryBody"></tbody>
+          </table>
+          <div class="empty" id="empty">아직 등록된 카드가 없습니다.</div>
+        </div>
+      </div>
+
+      <aside class="section">
+        <div class="section-head">
+          <h2>레어도 별칭</h2>
+        </div>
+        <div class="body side-list" id="aliasList"></div>
+      </aside>
+    </main>
   </div>
-</div>
 
-<div class="overlay" id="manualOverlay">
-  <div class="sheet">
-    <div style="font-size:15px;font-weight:800;color:var(--gold-bright);margin-bottom:4px;">카드 직접 등록</div>
-    <div style="font-size:12px;color:var(--text-dim);margin-bottom:16px;">
-      두 DB에서 찾지 못했어. 카드 정보를 직접 입력하면 앱에 저장돼서 다음엔 바로 인식돼.
-    </div>
+  <script>
+    const SpeechRecognition = window.SpeechRecognition || window.webkitSpeechRecognition;
+    const storageKey = "ygoVoiceInventory.v1";
 
-    <div class="field-label">인식된 카드번호</div>
-    <div id="manualCodeLabel" style="font-size:14px;font-weight:700;color:var(--gold-bright);margin-bottom:14px;padding:10px 12px;background:var(--panel-2);border-radius:8px;border:1px solid var(--line);"></div>
+    const cards = [
+      "푸른 눈의 백룡",
+      "블랙 매지션",
+      "블랙 매지션 걸",
+      "붉은 눈의 흑룡",
+      "증식의 G",
+      "하루 우라라",
+      "무한포영",
+      "말살의 지명자",
+      "무덤의 지명자",
+      "원시생명체 니비루",
+      "번개",
+      "해피의 깃털",
+      "라의 익신룡",
+      "오벨리스크의 거신병",
+      "오시리스의 천공룡",
+      "액세스코드 토커",
+      "소명의 신궁 아폴로우사",
+      "네가로기어 아제우스",
+      "티아라멘츠 키토칼로스",
+      "섬도희 카가리",
+      "알버스의 낙윤",
+      "낙인융합"
+    ];
 
-    <div class="field-label">카드명</div>
-    <input class="manual-input" id="manualCardName" placeholder="예: 블랙 매지션" type="text">
+    const rarityOptions = [
+      "Common",
+      "Rare",
+      "Super Rare",
+      "Ultra Rare",
+      "Secret Rare",
+      "Ultimate Rare",
+      "Collector's Rare",
+      "Prismatic Secret Rare",
+      "Quarter Century Secret Rare",
+      "Ghost Rare"
+    ];
 
-    <div class="field-label">인쇄판 라벨</div>
-    <input class="manual-input" id="manualIllustLabel" placeholder="예: 쿼터센츄리 아트컬렉션 (QCAC-KR)">
+    const rarityAliases = [
+      { value: "Quarter Century Secret Rare", words: ["쿼터 센추리", "쿼센", "쿼싴", "25싴", "25시크", "쿼터시크"] },
+      { value: "Prismatic Secret Rare", words: ["프리즈마틱", "프싴", "프시크", "프리즈마틱 시크릿"] },
+      { value: "Collector's Rare", words: ["컬렉터즈", "컬레", "컬렉터 레어"] },
+      { value: "Ultimate Rare", words: ["얼티", "얼티밋", "얼티메이트"] },
+      { value: "Secret Rare", words: ["시크릿", "시크", "싴", "시크릿 레어"] },
+      { value: "Ultra Rare", words: ["울트라", "울레", "울트라 레어"] },
+      { value: "Super Rare", words: ["슈퍼", "슈레", "슈퍼 레어"] },
+      { value: "Ghost Rare", words: ["고스트", "고레", "고스트 레어"] },
+      { value: "Rare", words: ["레어"] },
+      { value: "Common", words: ["노멀", "노말", "커먼", "일반"] }
+    ];
 
-    <div class="field-label">레어도 <span style="font-size:10px;color:var(--text-dim);font-weight:400">(쉼표로 구분)</span></div>
-    <input class="manual-input" id="manualRarities" placeholder="예: 울트라레어, 시크릿레어, 쿼터센츄리 시크릿레어">
+    const conditionAliases = [
+      { value: "NM", words: ["니어민트", "민트", "엔엠", "nm"] },
+      { value: "LP", words: ["라이트 플레이드", "라플", "엘피", "lp"] },
+      { value: "MP", words: ["모더레이트", "엠피", "mp"] },
+      { value: "HP", words: ["헤비 플레이드", "에이치피", "hp"] },
+      { value: "DMG", words: ["데미지", "손상", "dmg"] }
+    ];
 
-    <div class="sheet-actions">
-      <button class="btn-cancel" id="manualCancelBtn">취소</button>
-      <button class="btn-confirm in" id="manualSaveBtn">등록 후 입출고</button>
-    </div>
-  </div>
+    const actionAliases = [
+      { value: "sold", words: ["판매", "팔림", "판매됨", "출고"] },
+      { value: "remove", words: ["차감", "제거", "삭제", "빼", "뺌"] },
+      { value: "add", words: ["추가", "입고", "등록", "넣어", "더해"] }
+    ];
 
-<div class="toast" id="toast"></div>
-<div class="overlay" id="candidateOverlay">
-  <div class="sheet">
-    <div style="font-size:15px;font-weight:800;color:var(--gold-bright);margin-bottom:4px;">카드 선택</div>
-    <div style="font-size:12px;color:var(--text-dim);margin-bottom:14px;">인식된 카드명과 비슷한 카드야. 맞는 카드 선택해줘.</div>
-    <div id="candidateList"></div>
-    <div class="sheet-actions" style="margin-top:14px;">
-      <button class="btn-cancel" id="candidateCancelBtn">취소</button>
-    </div>
-  </div>
-</div>
+    const koreanNumbers = new Map([
+      ["한", 1], ["하나", 1], ["일", 1],
+      ["두", 2], ["둘", 2], ["이", 2],
+      ["세", 3], ["셋", 3], ["삼", 3],
+      ["네", 4], ["넷", 4], ["사", 4],
+      ["다섯", 5], ["오", 5],
+      ["여섯", 6], ["육", 6],
+      ["일곱", 7], ["칠", 7],
+      ["여덟", 8], ["팔", 8],
+      ["아홉", 9], ["구", 9],
+      ["열", 10], ["십", 10]
+    ]);
 
-<nav class="tabbar">
-  <button class="tab-btn active" data-screen="cam">📷 인식</button>
-  <button class="tab-btn" data-screen="search">🔍 검색</button>
-  <button class="tab-btn" data-screen="log">🧾 로그</button>
-</nav>
+    let recognition = null;
+    let listening = false;
+    let inventory = loadInventory();
 
-<script>
-/* ==========================================================================
-   DB 레이어 (localStorage → Firestore로 교체 시 이 블록만 수정)
-   재고 키: `{printId}||{rarity}`
-   ========================================================================== */
-const DB = {
-  INV:'ocg_inventory', TX:'ocg_transactions',
-  read(k,fb){try{return JSON.parse(localStorage.getItem(k))??fb;}catch(e){return fb;}},
-  write(k,v){localStorage.setItem(k,JSON.stringify(v));},
-  getInventory(){return this.read(this.INV,{});},
-  getTx(){return this.read(this.TX,[]);},
-  getStock(printId,rarity){
-    return this.getInventory()[printId+'||'+rarity]?.quantity||0;
-  },
-  upsertInventory(cardName,printId,illustLabel,rarity,delta){
-    const inv=this.getInventory();
-    const key=printId+'||'+rarity;
-    const prev=inv[key]?.quantity||0;
-    const next=Math.max(0,prev+delta);
-    inv[key]={cardName,printId,illustLabel,rarity,quantity:next,updatedAt:Date.now()};
-    this.write(this.INV,inv);
-    return next;
-  },
-  addTx(entry){
-    const tx=this.getTx();
-    tx.unshift(entry);
-    this.write(this.TX,tx.slice(0,300));
-  },
+    const $ = (id) => document.getElementById(id);
 
-  // Vision API 월별 사용량 카운터
-  USAGE_KEY: 'ocg_vision_usage',
-  getUsage(){
-    const d = this.read(this.USAGE_KEY, {});
-    const ym = new Date().toISOString().slice(0,7); // "2026-06"
-    return { count: d[ym] || 0, ym };
-  },
-  addUsage(){
-    const d = this.read(this.USAGE_KEY, {});
-    const ym = new Date().toISOString().slice(0,7);
-    d[ym] = (d[ym] || 0) + 1;
-    this.write(this.USAGE_KEY, d);
-    return d[ym];
-  },
-  CUSTOM_KEY:'ocg_custom_cards',
-  getCustomCards(){ return this.read(this.CUSTOM_KEY,{}); },
-  saveCustomCard(printId, entry){
-    const c=this.getCustomCards();
-    c[printId]=entry;
-    this.write(this.CUSTOM_KEY,c);
-  },
-  findCustomByCode(code){
-    const c=this.getCustomCards();
-    return c[code]||null;
-  }
-};
+    function init() {
+      rarityOptions.forEach((rarity) => {
+        const option = document.createElement("option");
+        option.value = rarity;
+        option.textContent = rarity;
+        $("rarity").appendChild(option);
+      });
 
-/* ==========================================================================
-   YGOPRODECK API
-   ========================================================================== */
-const API = 'https://db.ygoprodeck.com/api/v7/cardinfo.php';
+      cards.forEach((card) => {
+        const option = document.createElement("option");
+        option.value = card;
+        $("cardNames").appendChild(option);
+      });
 
-// 카드번호(set code)로 조회 → 인쇄판+일러스트 정보 포함
-async function fetchByCode(code){
-  const url = `${API}?cardsetcode=${encodeURIComponent(code)}&language=ko`;
-  const res = await fetch(url);
-  if(!res.ok) return null;
-  const data = await res.json();
-  return data.data?.[0] || null;
-}
+      $("aliasList").innerHTML = rarityAliases.map((item) => (
+        `<div class="alias"><strong>${item.value}</strong><span>${item.words.join(", ")}</span></div>`
+      )).join("");
 
-// 카드명으로 검색 (검색 화면용)
-async function searchByName(name){
-  const url = `${API}?fname=${encodeURIComponent(name)}&language=ko`;
-  const res = await fetch(url);
-  if(!res.ok) return [];
-  const data = await res.json();
-  return data.data || [];
-}
+      $("micBtn").addEventListener("click", toggleMic);
+      $("parseBtn").addEventListener("click", parseTranscript);
+      $("saveBtn").addEventListener("click", saveParsed);
+      $("search").addEventListener("input", renderInventory);
+      $("clearBtn").addEventListener("click", clearInventory);
+      $("cardName").addEventListener("input", updateSuggestions);
 
-// API 응답에서 인쇄판 목록 추출
-function parsePrints(card){
-  if(!card.card_sets) return [{
-    printId:'UNKNOWN', illustLabel:'알 수 없음', rarities:['노멀'], imageUrl:card.card_images?.[0]?.image_url
-  }];
+      document.querySelectorAll("[data-example]").forEach((button) => {
+        button.addEventListener("click", () => {
+          $("transcript").value = button.dataset.example;
+          parseTranscript();
+        });
+      });
 
-  // 이미지 매핑 — card_images 배열이 일러스트 순서대로 들어있음
-  const images = card.card_images || [];
+      setupSpeech();
+      renderInventory();
+      updateSuggestions();
+    }
 
-  // card_sets 중복 제거 후 인쇄판으로 변환
-  const seen = new Set();
-  const prints = [];
-  card.card_sets.forEach(s=>{
-    const key = s.set_code;
-    if(seen.has(key)) return;
-    seen.add(key);
-    // 이미지 — 같은 카드 내 여러 일러스트는 images 배열 순서로 대응
-    const imgIdx = prints.length < images.length ? prints.length : 0;
-    prints.push({
-      printId: s.set_code,
-      illustLabel: `${s.set_name} (${s.set_code})`,
-      rarities: collectRarities(card.card_sets, s.set_code),
-      imageUrl: images[imgIdx]?.image_url_small || images[0]?.image_url_small
-    });
-  });
-  return prints;
-}
+    function setupSpeech() {
+      if (!SpeechRecognition) {
+        setStatus("이 브라우저는 음성 인식을 지원하지 않습니다. 문장을 직접 입력해도 파싱할 수 있습니다.");
+        return;
+      }
 
-function collectRarities(sets, code){
-  const r=[];
-  sets.forEach(s=>{ if(s.set_code===code&&!r.includes(s.set_rarity)) r.push(s.set_rarity); });
-  return r.length ? r : ['Normal'];
-}
+      recognition = new SpeechRecognition();
+      recognition.lang = "ko-KR";
+      recognition.interimResults = true;
+      recognition.continuous = false;
 
-/* ==========================================================================
-   Yugipedia API (YGOPRODECK 폴백)
-   MediaWiki SMW ask → 카드번호로 카드명/타입 조회
-   ========================================================================== */
-async function fetchFromYugipedia(code){
-  try{
-    // 1차: SMW ask — 카드번호 직접 조회
-    const askUrl='https://yugipedia.com/api.php?action=ask&format=json&origin=*&query='+
-      encodeURIComponent(`[[Card number::${code}]]|?English name|?Korean name|?Card type|?Primary type`);
-    const askRes=await fetch(askUrl,{signal:AbortSignal.timeout(7000)});
-    if(askRes.ok){
-      const d=await askRes.json();
-      const items=Object.values(d?.query?.results||{});
-      if(items.length){
-        const p=items[0].printouts||{};
-        const name=p['Korean name']?.[0]||p['English name']?.[0];
-        if(name){
-          const type=p['Primary type']?.[0]?.fulltext||p['Card type']?.[0]?.fulltext||'';
-          return buildYugipediaCard(name,type,code);
+      recognition.onstart = () => {
+        listening = true;
+        $("micBtn").classList.add("listening");
+        $("micLabel").textContent = "듣는 중";
+        setStatus("듣고 있습니다.");
+      };
+
+      recognition.onresult = (event) => {
+        let text = "";
+        for (let i = event.resultIndex; i < event.results.length; i += 1) {
+          text += event.results[i][0].transcript;
         }
+        $("transcript").value = text.trim();
+        parseTranscript();
+      };
+
+      recognition.onerror = (event) => {
+        setStatus(`음성 인식 오류: ${event.error}`);
+      };
+
+      recognition.onend = () => {
+        listening = false;
+        $("micBtn").classList.remove("listening");
+        $("micLabel").textContent = "말하기";
+        parseTranscript();
+      };
+    }
+
+    function toggleMic() {
+      if (!recognition) {
+        setStatus("마이크 대신 문장을 입력하고 해석 버튼을 눌러주세요.");
+        return;
+      }
+
+      if (listening) {
+        recognition.stop();
+      } else {
+        recognition.start();
       }
     }
 
-    // 2차: 텍스트 검색 → 카드 페이지 SMW 조회
-    const srUrl='https://yugipedia.com/api.php?action=query&list=search&srsearch='+
-      encodeURIComponent(code)+'&srlimit=5&format=json&origin=*';
-    const srRes=await fetch(srUrl,{signal:AbortSignal.timeout(7000)});
-    if(srRes.ok){
-      const sd=await srRes.json();
-      const hits=sd?.query?.search||[];
-      // 세트 목록 페이지 제외, 순수 카드 페이지 우선
-      const cardHit=hits.find(h=>!h.title.includes(':'))||hits[0];
-      if(cardHit&&!cardHit.title.startsWith('Set Card Lists')){
-        const propUrl='https://yugipedia.com/api.php?action=ask&format=json&origin=*&query='+
-          encodeURIComponent(`[[${cardHit.title}]]|?English name|?Korean name|?Card type|?Primary type`);
-        const pRes=await fetch(propUrl,{signal:AbortSignal.timeout(7000)});
-        if(pRes.ok){
-          const pd=await pRes.json();
-          const items=Object.values(pd?.query?.results||{});
-          if(items.length){
-            const p=items[0].printouts||{};
-            const name=p['Korean name']?.[0]||p['English name']?.[0]||cardHit.title;
-            const type=p['Primary type']?.[0]?.fulltext||'';
-            return buildYugipediaCard(name,type,code);
-          }
-        }
-        return buildYugipediaCard(cardHit.title,'',code);
+    function normalize(text) {
+      return text.toLowerCase().replace(/\s+/g, " ").trim();
+    }
+
+    function parseTranscript() {
+      const text = $("transcript").value.trim();
+      const normalized = normalize(text);
+      if (!text) {
+        setStatus("등록할 문장을 말하거나 입력해주세요.");
+        return;
       }
-    }
-    return null;
-  }catch(e){
-    console.warn('Yugipedia error:',e);
-    return null;
-  }
-}
 
-function buildYugipediaCard(name,type,code){
-  // QCAC-KR001 → 세트명 추출
-  const setLabel=code.replace(/-[A-Z]{0,2}\d+$/,'')||code;
-  return {
-    name, type, fromYugipedia:true,
-    card_sets:[{set_code:code, set_name:`(Yugipedia) ${setLabel}`, set_rarity:'Ultra Rare'}],
-    card_images:[]
-  };
-}
+      const rarity = findAlias(normalized, rarityAliases) || "Common";
+      const condition = findAlias(normalized, conditionAliases) || "NM";
+      const action = findAlias(normalized, actionAliases) || "add";
+      const quantity = findQuantity(normalized);
+      const cardName = findCardName(text, normalized);
 
-// 커스텀 카드(수동 등록)를 openSheet 호환 구조로 변환
-function buildCustomCard(entry){
-  return {
-    name:entry.cardName, type:'',
-    fromCustom:true,
-    card_sets:[{set_code:entry.printId, set_name:entry.illustLabel, set_rarity:entry.rarities[0]}],
-    card_images:[],
-    _customRarities:entry.rarities
-  };
-}
+      $("rarity").value = rarity;
+      $("condition").value = condition;
+      $("action").value = action;
+      $("quantity").value = quantity;
+      $("cardName").value = cardName;
 
-/* ==========================================================================
-   OCR 엔진 — Cloudflare Worker → Google Vision API
-   카드 전체 이미지를 Worker로 전송, Vision이 텍스트 전체 추출
-   카드명(한글)과 카드번호(영숫자) 동시 인식
-   ========================================================================== */
-const WORKER_URL = 'https://ocg-worker.angbeesh.workers.dev';
-const CODE_REGEX = /[A-Z]{2,6}-[A-Z]{0,2}\d{2,4}/g;
-const KO_NAME_LINES = /^[가-힣\s·\-]{2,20}$/;
-
-async function runVisionOCR(canvas){
-  // 월 1000회 한도 체크
-  const { count, ym } = DB.getUsage();
-  const LIMIT = 1000;
-  if(count >= LIMIT){
-    throw new Error(`이번 달 Vision API 한도(${LIMIT}회)를 초과했어. 다음 달에 다시 사용 가능해.`);
-  }
-
-  setOcrStatus(`Google Vision 분석 중... (이번 달 ${count+1}/${LIMIT}회)`);
-  // Vision API용으로 800px로 리사이즈 (원본 4K는 너무 커서 전송 실패 가능)
-  const resized = document.createElement('canvas');
-  const maxW = 800;
-  const ratio = maxW / canvas.width;
-  resized.width = maxW;
-  resized.height = Math.round(canvas.height * ratio);
-  resized.getContext('2d').drawImage(canvas, 0, 0, resized.width, resized.height);
-  const base64 = resized.toDataURL('image/jpeg', 0.85).split(',')[1];
-
-  const res = await fetch(WORKER_URL, {
-    method: 'POST',
-    headers: { 'Content-Type': 'application/json' },
-    body: JSON.stringify({ image: base64 }),
-    signal: AbortSignal.timeout(12000)
-  });
-
-  if(!res.ok) throw new Error('Worker 응답 오류: ' + res.status);
-  const { text } = await res.json();
-
-  // 성공 시 카운터 증가
-  const newCount = DB.addUsage();
-  updateUsageDisplay(newCount);
-
-  setOcrStatus('');
-  if(!text) return { code: null, name: null };
-
-  // 카드번호 추출
-  const clean = text.replace(/\s/g, '');
-  const codes = clean.match(CODE_REGEX);
-  const code = codes ? codes[0] : null;
-
-  // 카드명 추출 — 한글 2글자 이상인 줄 중 첫 번째
-  const lines = text.split('\n').map(l => l.trim()).filter(Boolean);
-  const nameLine = lines.find(l => KO_NAME_LINES.test(l)) || null;
-
-  return { code, name: nameLine };
-}
-
-/* ==========================================================================
-   카메라 / 자동인식 (프레임 안정 → OCR → API)
-   ========================================================================== */
-let detecting=false, stableCount=0, lastFrameData=null;
-let overlayOpen=false, cooldown=false;
-let _videoTrack=null, _imageCapture=null; // grabFrame용 전역 트랙
-const STABLE_THRESHOLD=7, DIFF_TOL=8;
-
-const video = document.getElementById('video');
-const shotCanvas = document.getElementById('shot');
-const ocrCanvas = document.getElementById('ocr-preview');
-const guideBox = document.getElementById('guideBox');
-const camStatus = document.getElementById('camStatus');
-const ring = document.getElementById('ring');
-const ocrStatusEl = document.getElementById('ocrStatus');
-const cooldownBar = document.getElementById('cooldownBar');
-
-function showFocusRing(x, y){
-  const wrap = document.getElementById('camWrap');
-  const ring = document.createElement('div');
-  ring.className = 'focus-ring';
-  ring.style.left = x + 'px';
-  ring.style.top  = y + 'px';
-  wrap.appendChild(ring);
-  setTimeout(() => ring.remove(), 650);
-}
-
-function updateUsageDisplay(count){
-  const LIMIT = 1000;
-  const pct = Math.min(count / LIMIT * 100, 100);
-  document.getElementById('usageText').textContent = `${count} / ${LIMIT}회`;
-  const bar = document.getElementById('usageBar');
-  bar.style.width = pct + '%';
-  bar.style.background = pct >= 90 ? 'var(--danger)' : pct >= 70 ? 'var(--gold-bright)' : 'var(--ok)';
-}
-
-function setOcrStatus(msg){
-  if(msg){ ocrStatusEl.textContent=msg; ocrStatusEl.classList.add('show'); }
-  else ocrStatusEl.classList.remove('show');
-}
-
-document.getElementById('camStartBtn').addEventListener('click', async ()=>{
-  document.getElementById('camStartBtn').disabled = true;
-  document.getElementById('camStartBtn').textContent = '카메라 시작 중...';
-  try{
-    // 사용 가능한 카메라 목록에서 후면 카메라 deviceId 직접 가져오기
-    // (facingMode만으론 저화질 카메라가 선택될 수 있음)
-    const stream = await navigator.mediaDevices.getUserMedia({
-      video:{
-        facingMode: { exact: 'environment' },
-        width:{ ideal:3840 }, height:{ ideal:2160 },
-      },
-      audio:false
-    });
-    video.srcObject = stream;
-    await video.play();
-
-    // 실제 해상도 확인 (디버그)
-    const settings = stream.getVideoTracks()[0].getSettings();
-    const resInfo = `${settings.width}×${settings.height}`;
-    document.getElementById('resDebug').textContent = `📐 ${resInfo}`;
-
-    // 트랙 직접 제어 — 초점 + 줌
-    const track = stream.getVideoTracks()[0];
-    _videoTrack = track;
-    // ImageCapture — grabFrame()으로 네이티브 해상도 프레임 직접 캡처
-    if(typeof ImageCapture !== 'undefined'){
-      _imageCapture = new ImageCapture(track);
-    }
-    const caps = track.getCapabilities?.() || {};
-
-    if(caps.focusMode?.includes('continuous')){
-      await track.applyConstraints({ advanced:[{focusMode:'continuous'}] });
+      updateSuggestions();
+      setStatus(cardName ? "해석 결과를 확인한 뒤 재고에 반영하세요." : "카드명을 찾지 못했습니다. 카드명을 직접 선택하거나 입력하세요.");
     }
 
-    // 디지털 줌 지원 시 슬라이더 표시
-    if(caps.zoom){
-      const zoomWrap = document.getElementById('zoomWrap');
-      const zoomSlider = document.getElementById('zoomSlider');
-      const zoomLabel = document.getElementById('zoomLabel');
-      zoomWrap.style.display = 'flex';
-      zoomSlider.min = caps.zoom.min;
-      zoomSlider.max = Math.min(caps.zoom.max, 8);
-      zoomSlider.step = caps.zoom.step || 0.1;
-      const defaultZoom = Math.min(caps.zoom.max, Math.max(caps.zoom.min, 2));
-      zoomSlider.value = defaultZoom;
-      zoomLabel.textContent = defaultZoom.toFixed(1) + 'x';
-      // 초점+줌 함께 적용 (별도 호출하면 초점 설정이 덮어씌워짐)
-      await track.applyConstraints({ advanced:[
-        {focusMode:'continuous', zoom: defaultZoom}
-      ]});
+    function findAlias(text, groups) {
+      for (const group of groups) {
+        if (group.words.some((word) => text.includes(word.toLowerCase()))) {
+          return group.value;
+        }
+      }
+      return "";
+    }
 
-      zoomSlider.addEventListener('input', async ()=>{
-        const z = parseFloat(zoomSlider.value);
-        zoomLabel.textContent = z.toFixed(1) + 'x';
-        await track.applyConstraints({ advanced:[
-          {focusMode:'continuous', zoom: z}
-        ]});
+    function findQuantity(text) {
+      const digitMatch = text.match(/(\d+)\s*(장|개|매)?/);
+      if (digitMatch) {
+        return Math.max(1, Number(digitMatch[1]));
+      }
+
+      for (const [word, number] of koreanNumbers) {
+        const pattern = new RegExp(`${word}\\s*(장|개|매)?`);
+        if (pattern.test(text)) {
+          return number;
+        }
+      }
+
+      return 1;
+    }
+
+    function findCardName(rawText, normalized) {
+      const direct = cards.find((card) => normalized.includes(normalize(card)));
+      if (direct) {
+        return direct;
+      }
+
+      const compactText = normalized.replace(/\s/g, "");
+      const compact = cards.find((card) => compactText.includes(normalize(card).replace(/\s/g, "")));
+      if (compact) {
+        return compact;
+      }
+
+      const cleaned = rawText
+        .replace(/\d+\s*(장|개|매)/g, "")
+        .replace(/[한하나일두둘이세셋삼네넷사다섯오여섯육일곱칠여덟팔아홉구열십]+\s*(장|개|매)/g, "")
+        .trim();
+
+      const removals = [
+        ...rarityAliases.flatMap((item) => item.words),
+        ...conditionAliases.flatMap((item) => item.words),
+        ...actionAliases.flatMap((item) => item.words),
+        "레어", "한국어", "일본어", "영어"
+      ];
+
+      return removals.reduce((name, word) => (
+        name.replace(new RegExp(escapeRegExp(word), "gi"), "")
+      ), cleaned).replace(/\s+/g, " ").trim();
+    }
+
+    function updateSuggestions() {
+      const input = $("cardName").value.trim();
+      const matches = suggestCards(input);
+      $("suggestions").innerHTML = matches.map((card) => (
+        `<button class="suggestion" type="button" data-card="${card}">${card}</button>`
+      )).join("");
+
+      document.querySelectorAll("[data-card]").forEach((button) => {
+        button.addEventListener("click", () => {
+          $("cardName").value = button.dataset.card;
+          updateSuggestions();
+        });
       });
     }
 
-    // 3초마다 continuous autofocus 재트리거 (일부 Android 필요)
-    setInterval(async ()=>{
-      if(!_videoTrack) return;
-      try{
-        await _videoTrack.applyConstraints({ advanced:[{focusMode:'single-shot'}] });
-        await _videoTrack.applyConstraints({ advanced:[{focusMode:'continuous'}] });
-      }catch(e){}
-    }, 3000);
-
-    // 탭투포커스 — 탭한 위치로 초점 이동
-    document.getElementById('camWrap').addEventListener('click', async (e)=>{
-      if(!_videoTrack) return;
-      const rect = e.currentTarget.getBoundingClientRect();
-      const x = (e.clientX - rect.left) / rect.width;
-      const y = (e.clientY - rect.top)  / rect.height;
-      try{
-        await _videoTrack.applyConstraints({ advanced:[
-          {pointOfInterest:{x, y}, focusMode:'single-shot'}
-        ]});
-        // 0.8초 후 continuous로 복귀
-        setTimeout(async ()=>{
-          try{ await _videoTrack.applyConstraints({ advanced:[{focusMode:'continuous'}] }); }catch(e){}
-        }, 800);
-        // 탭 위치에 포커스 링 표시
-        showFocusRing(e.clientX - rect.left, e.clientY - rect.top);
-      }catch(e){}
-    });
-    document.getElementById('camStartBtn').style.display='none';
-    camStatus.textContent='카드 하단 카드번호가 보이게 비춰줘';
-    detecting=true;
-    requestAnimationFrame(detectLoop);
-  }catch(err){
-    camStatus.textContent='카메라 권한이 필요해 ('+err.message+')';
-    document.getElementById('camStartBtn').disabled=false;
-    document.getElementById('camStartBtn').textContent='카메라 시작';
-  }
-});
-
-let lastTick=0;
-function detectLoop(ts){
-  if(!detecting) return;
-  if(ts-lastTick>300){lastTick=ts;checkFrame();}
-  requestAnimationFrame(detectLoop);
-}
-
-function checkFrame(){
-  if(video.readyState<2||overlayOpen||cooldown) return;
-  const ctx=shotCanvas.getContext('2d',{willReadFrequently:true});
-  const W=120,H=Math.round(120/0.685);
-  shotCanvas.width=W;shotCanvas.height=H;
-  ctx.drawImage(video,0,0,W,H);
-  const frame=ctx.getImageData(0,0,W,H).data;
-
-  if(lastFrameData){
-    let diff=0;
-    for(let i=0;i<frame.length;i+=4) diff+=Math.abs(frame[i]-lastFrameData[i]);
-    const avg=diff/(frame.length/4);
-    if(avg<DIFF_TOL){
-      stableCount++;
-      guideBox.classList.add('stable');
-      camStatus.textContent=`인식 준비 (${Math.min(stableCount,STABLE_THRESHOLD)}/${STABLE_THRESHOLD})`;
-    }else{
-      stableCount=0;
-      guideBox.classList.remove('stable');
-      camStatus.textContent='카드를 가이드에 맞추고 가만히 있어줘';
+    function suggestCards(input) {
+      if (!input) {
+        return cards.slice(0, 5);
+      }
+      const q = normalize(input).replace(/\s/g, "");
+      return cards
+        .map((card) => ({ card, score: similarity(q, normalize(card).replace(/\s/g, "")) }))
+        .sort((a, b) => b.score - a.score)
+        .slice(0, 5)
+        .filter((item) => item.score > 0)
+        .map((item) => item.card);
     }
-    if(stableCount>=STABLE_THRESHOLD){stableCount=0;captureAndRecognize();}
-  }
-  lastFrameData=frame;
-}
 
-async function captureAndRecognize(){
-  ring.classList.add('spin');
-  camStatus.textContent='카드 인식 중...';
-  cooldown=true;
+    function similarity(a, b) {
+      if (b.includes(a) || a.includes(b)) {
+        return Math.max(a.length, b.length) + 8;
+      }
+      let score = 0;
+      for (const char of new Set(a)) {
+        if (b.includes(char)) {
+          score += 1;
+        }
+      }
+      return score;
+    }
 
-  // ── 프레임 캡처 (네이티브 해상도) ──
-  let bitmap = null;
-  if(_imageCapture){
-    try{ bitmap = await _imageCapture.grabFrame(); }
-    catch(e){ bitmap = null; }
-  }
+    function saveParsed() {
+      const item = {
+        cardName: $("cardName").value.trim(),
+        rarity: $("rarity").value,
+        condition: $("condition").value,
+        language: $("language").value,
+        quantity: Math.max(1, Number($("quantity").value) || 1),
+        action: $("action").value,
+        updatedAt: new Date().toISOString()
+      };
 
-  const srcW = bitmap ? bitmap.width  : video.videoWidth;
-  const srcH = bitmap ? bitmap.height : video.videoHeight;
-  const src  = bitmap || video;
-
-  // 가이드박스 전체 영역 크롭 (카드 전체)
-  const guideW = srcW * 0.70;
-  const guideH = guideW / 0.685;
-  const gx = (srcW - guideW) / 2;
-  const gy = (srcH - guideH) / 2;
-
-  const oc = document.createElement('canvas');
-  oc.width  = Math.round(guideW);
-  oc.height = Math.round(guideH);
-  const octx = oc.getContext('2d');
-  octx.drawImage(src, gx, gy, guideW, guideH, 0, 0, oc.width, oc.height);
-  if(bitmap) bitmap.close();
-
-  // 미리보기
-  const pc = ocrCanvas.getContext('2d');
-  ocrCanvas.width = oc.width; ocrCanvas.height = oc.height;
-  pc.drawImage(oc, 0, 0);
-
-  try{
-    const { code, name } = await runVisionOCR(oc);
-    ring.classList.remove('spin');
-
-    // ── 카드명으로 우선 검색 ──
-    let cardData = null;
-
-    if(name){
-      camStatus.textContent = `"${name}" 검색 중...`;
-      setOcrStatus(`"${name}" 검색 중...`);
-      const results = await searchByName(name);
-      if(results.length === 1){
-        // 결과 하나면 바로 확정
-        cardData = results[0];
-      } else if(results.length > 1){
-        // 여러 개면 선택 목록 표시
-        setOcrStatus('');
-        openCandidateSheet(results, code);
+      if (!item.cardName) {
+        setStatus("카드명을 입력해야 재고에 반영할 수 있습니다.");
+        $("cardName").focus();
         return;
       }
+
+      const index = inventory.findIndex((row) => (
+        row.cardName === item.cardName &&
+        row.rarity === item.rarity &&
+        row.condition === item.condition &&
+        row.language === item.language
+      ));
+
+      const delta = item.action === "add" ? item.quantity : -item.quantity;
+
+      if (index >= 0) {
+        inventory[index].quantity += delta;
+        inventory[index].updatedAt = item.updatedAt;
+        if (inventory[index].quantity <= 0) {
+          inventory.splice(index, 1);
+        }
+      } else if (delta > 0) {
+        inventory.push({
+          cardName: item.cardName,
+          rarity: item.rarity,
+          condition: item.condition,
+          language: item.language,
+          quantity: item.quantity,
+          updatedAt: item.updatedAt
+        });
+      } else {
+        setStatus("차감할 기존 재고가 없습니다.");
+        return;
+      }
+
+      saveInventory();
+      renderInventory();
+      setStatus("재고에 반영했습니다.");
     }
 
-    // ── 카드명 실패 시 카드번호로 폴백 ──
-    if(!cardData && code){
-      camStatus.textContent = `카드번호: ${code} 조회 중...`;
-      cardData = await fetchByCode(code);
-      if(!cardData){
-        setOcrStatus('Yugipedia 조회 중...');
-        cardData = await fetchFromYugipedia(code);
+    function renderInventory() {
+      const query = normalize($("search").value || "");
+      const rows = inventory
+        .filter((item) => normalize(`${item.cardName} ${item.rarity} ${item.condition} ${item.language}`).includes(query))
+        .sort((a, b) => b.updatedAt.localeCompare(a.updatedAt));
+
+      $("inventoryBody").innerHTML = rows.map((item, index) => `
+        <tr>
+          <td><strong>${escapeHtml(item.cardName)}</strong></td>
+          <td><span class="badge ${isHighRarity(item.rarity) ? "gold" : ""}">${escapeHtml(item.rarity)}</span></td>
+          <td>${escapeHtml(item.condition)}</td>
+          <td>${escapeHtml(item.language)}</td>
+          <td class="qty">${item.quantity}</td>
+          <td>${formatDate(item.updatedAt)}</td>
+          <td>
+            <div class="mini-actions">
+              <button class="icon-btn" type="button" title="수량 추가" data-plus="${index}">+</button>
+              <button class="icon-btn" type="button" title="수량 차감" data-minus="${index}">-</button>
+            </div>
+          </td>
+        </tr>
+      `).join("");
+
+      document.querySelectorAll("[data-plus]").forEach((button) => {
+        button.addEventListener("click", () => adjustQuantity(rows[Number(button.dataset.plus)], 1));
+      });
+
+      document.querySelectorAll("[data-minus]").forEach((button) => {
+        button.addEventListener("click", () => adjustQuantity(rows[Number(button.dataset.minus)], -1));
+      });
+
+      $("empty").style.display = rows.length ? "none" : "block";
+      renderStats();
+    }
+
+    function adjustQuantity(target, delta) {
+      const index = inventory.findIndex((item) => item === target);
+      if (index < 0) {
+        return;
+      }
+      inventory[index].quantity += delta;
+      inventory[index].updatedAt = new Date().toISOString();
+      if (inventory[index].quantity <= 0) {
+        inventory.splice(index, 1);
+      }
+      saveInventory();
+      renderInventory();
+    }
+
+    function renderStats() {
+      const total = inventory.reduce((sum, item) => sum + item.quantity, 0);
+      const high = inventory
+        .filter((item) => isHighRarity(item.rarity))
+        .reduce((sum, item) => sum + item.quantity, 0);
+
+      $("totalCards").textContent = total;
+      $("uniqueCards").textContent = inventory.length;
+      $("rareCards").textContent = high;
+    }
+
+    function clearInventory() {
+      if (!inventory.length) {
+        setStatus("초기화할 재고가 없습니다.");
+        return;
+      }
+      const ok = confirm("현재 재고를 모두 초기화할까요?");
+      if (!ok) {
+        return;
+      }
+      inventory = [];
+      saveInventory();
+      renderInventory();
+      setStatus("재고를 초기화했습니다.");
+    }
+
+    function isHighRarity(rarity) {
+      return !["Common", "Rare", "Super Rare"].includes(rarity);
+    }
+
+    function setStatus(message) {
+      $("status").textContent = message;
+    }
+
+    function saveInventory() {
+      localStorage.setItem(storageKey, JSON.stringify(inventory));
+    }
+
+    function loadInventory() {
+      try {
+        return JSON.parse(localStorage.getItem(storageKey)) || [];
+      } catch {
+        return [];
       }
     }
 
-    // ── 로컬 커스텀 카드 ──
-    if(!cardData && code){
-      const custom = DB.findCustomByCode(code);
-      if(custom) cardData = buildCustomCard(custom);
+    function formatDate(value) {
+      return new Intl.DateTimeFormat("ko-KR", {
+        month: "2-digit",
+        day: "2-digit",
+        hour: "2-digit",
+        minute: "2-digit"
+      }).format(new Date(value));
     }
 
-    setOcrStatus('');
-
-    if(!cardData){
-      camStatus.textContent = '카드를 인식하지 못했어 — 다시 시도해줘';
-      openManualSheet(code || '');
-      return;
+    function escapeRegExp(value) {
+      return value.replace(/[.*+?^${}()|[\]\\]/g, "\\$&");
     }
 
-    const prints = parsePrints(cardData);
-    const detectedPrint = prints.find(p => p.printId === code) || prints[0];
-    openSheet(cardData, prints, detectedPrint.printId);
+    function escapeHtml(value) {
+      return String(value)
+        .replace(/&/g, "&amp;")
+        .replace(/</g, "&lt;")
+        .replace(/>/g, "&gt;")
+        .replace(/"/g, "&quot;")
+        .replace(/'/g, "&#039;");
+    }
 
-  }catch(err){
-    ring.classList.remove('spin');
-    setOcrStatus('');
-    showToast('오류: ' + err.message);
-    startCooldown(1500);
-  }
-}
-
-function startCooldown(ms){
-  cooldownBar.classList.add('show');
-  const fill=document.getElementById('cooldownFill');
-  fill.style.animation='none';
-  fill.offsetHeight; // reflow
-  fill.style.animation=`cooldown ${ms}ms linear forwards`;
-  setTimeout(()=>{cooldown=false;cooldownBar.classList.remove('show');},ms);
-}
-
-/* ==========================================================================
-   모드
-   ========================================================================== */
-let mode='in';
-document.getElementById('modeInBtn').addEventListener('click',()=>setMode('in'));
-document.getElementById('modeOutBtn').addEventListener('click',()=>setMode('out'));
-function setMode(m){
-  mode=m;
-  document.getElementById('modeInBtn').classList.toggle('active',m==='in');
-  document.getElementById('modeOutBtn').classList.toggle('active',m==='out');
-}
-
-/* ==========================================================================
-   모달
-   ========================================================================== */
-let currentCard=null,currentPrint=null,currentQty=1,currentPrints=[];
-
-let _fromSearch=false;
-function openSheet(card,prints,detectedPrintId,fromSearch=false){
-  _fromSearch=fromSearch;
-  currentCard=card; currentPrints=prints; currentQty=1;
-
-  // 헤더 이미지
-  const imgWrap=document.getElementById('modalImgWrap');
-  const imgUrl=prints.find(p=>p.printId===detectedPrintId)?.imageUrl||prints[0]?.imageUrl;
-  if(imgUrl){
-    imgWrap.innerHTML=`<img class="card-img" src="${imgUrl}" alt="${card.name}">`;
-  }else{
-    imgWrap.innerHTML=`<div class="card-img-placeholder">${(card.name||'').slice(0,2)}</div>`;
-  }
-
-  document.getElementById('modalName').textContent=card.name||'Unknown';
-  document.getElementById('modalMode').textContent=mode==='in'?'입고 처리':'출고 처리';
-  document.getElementById('modalMeta').textContent=
-    `${card.type||''} ${card.race||''}`.trim() +
-    (prints.length>1?` · ${prints.length}가지 인쇄판`:'');
-  document.getElementById('qtyVal').textContent=1;
-  document.getElementById('confirmBtn').className='btn-confirm '+mode;
-  document.getElementById('confirmBtn').textContent=mode==='in'?'입고 저장':'출고 저장';
-
-  // 일러스트 그리드
-  const grid=document.getElementById('illustGrid');
-  grid.innerHTML='';
-  prints.forEach(p=>{
-    const div=document.createElement('div');
-    div.className='illust-card'+(p.printId===detectedPrintId?' selected':'');
-    div.innerHTML=p.imageUrl
-      ?`<img src="${p.imageUrl}" alt="${p.printId}" loading="lazy"><div class="ic-code">${p.printId}</div>`
-      :`<div class="ic-placeholder">${p.printId.split('-')[0]}</div><div class="ic-code">${p.printId}</div>`;
-    div.addEventListener('click',()=>{
-      grid.querySelectorAll('.illust-card').forEach(c=>c.classList.remove('selected'));
-      div.classList.add('selected');
-      selectPrint(p);
-      // 메인 이미지도 교체
-      if(p.imageUrl) imgWrap.innerHTML=`<img class="card-img" src="${p.imageUrl}" alt="">`;
-    });
-    grid.appendChild(div);
-  });
-
-  const matched=prints.find(p=>p.printId===detectedPrintId)||prints[0];
-  selectPrint(matched);
-  document.getElementById('overlay').classList.add('show');
-  overlayOpen=true;
-}
-
-function selectPrint(p){
-  currentPrint=p;
-  const sel=document.getElementById('raritySelect');
-  sel.innerHTML='';
-  p.rarities.forEach(r=>{
-    const o=document.createElement('option');
-    const qty=DB.getStock(p.printId,r);
-    o.value=r; o.textContent=`${r}  (현재 ${qty}장)`;
-    sel.appendChild(o);
-  });
-}
-
-function closeSheet(fromSearch=false){
-  document.getElementById('overlay').classList.remove('show');
-  overlayOpen=false; currentCard=null; currentPrint=null;
-  if(!fromSearch) startCooldown(2500);
-  // 검색 결과 재렌더 (재고 수량 업데이트 반영)
-  if(fromSearch) doSearch();
-}
-
-document.getElementById('qtyPlus').addEventListener('click',()=>{
-  currentQty++;document.getElementById('qtyVal').textContent=currentQty;
-});
-document.getElementById('qtyMinus').addEventListener('click',()=>{
-  currentQty=Math.max(1,currentQty-1);document.getElementById('qtyVal').textContent=currentQty;
-});
-document.getElementById('cancelBtn').addEventListener('click',()=>closeSheet(_fromSearch));
-
-document.getElementById('confirmBtn').addEventListener('click',()=>{
-  if(!currentCard||!currentPrint) return;
-  const rarity=document.getElementById('raritySelect').value;
-  const delta=mode==='in'?currentQty:-currentQty;
-  if(mode==='out'&&DB.getStock(currentPrint.printId,rarity)<currentQty){
-    showToast('⚠ 재고가 부족해!');return;
-  }
-  const newQty=DB.upsertInventory(currentCard.name,currentPrint.printId,currentPrint.illustLabel,rarity,delta);
-  DB.addTx({
-    cardName:currentCard.name,printId:currentPrint.printId,
-    illustLabel:currentPrint.illustLabel,rarity,
-    type:mode,amount:currentQty,resultQty:newQty,timestamp:Date.now()
-  });
-  showToast(`${currentCard.name} [${currentPrint.printId}] ${rarity} ${mode==='in'?'+':'-'}${currentQty}장 → ${newQty}장`);
-  closeSheet(_fromSearch);renderLog();
-});
-
-/* ==========================================================================
-   검색 (YGOPRODECK API)
-   ========================================================================== */
-let searchTimer=null;
-document.getElementById('searchInput').addEventListener('input',()=>{
-  clearTimeout(searchTimer);
-  searchTimer=setTimeout(doSearch,400);
-});
-
-async function doSearch(){
-  const q=document.getElementById('searchInput').value.trim();
-  const el=document.getElementById('searchResults');
-  if(!q){el.innerHTML='';return;}
-  el.innerHTML='<div class="empty">검색 중...</div>';
-  try{
-    const cards=await searchByName(q);
-    renderSearchResults(cards);
-  }catch(e){
-    el.innerHTML='<div class="empty">검색 오류 — 네트워크를 확인해줘</div>';
-  }
-}
-
-const _searchCardMap = {};
-function renderSearchResults(cards){
-  const inv=DB.getInventory();
-  const el=document.getElementById('searchResults');
-  if(!cards.length){el.innerHTML='<div class="empty">검색 결과가 없어</div>';return;}
-  Object.keys(_searchCardMap).forEach(k=>delete _searchCardMap[k]);
-  el.innerHTML=cards.slice(0,30).map((card,ci)=>{
-    const prints=parsePrints(card);
-    _searchCardMap[ci]={card,prints};
-    const mainImg=card.card_images?.[0]?.image_url_small||'';
-    const printRows=prints.map((p,pi)=>{
-      const badges=p.rarities.map(r=>{
-        const qty=inv[p.printId+'||'+r]?.quantity||0;
-        return `<span class="rarity-badge ${qty===0?'zero':''}">${r}<span class="bqty">${qty}장</span></span>`;
-      }).join('');
-      const thumb=p.imageUrl?`<img class="print-thumb" src="${p.imageUrl}" loading="lazy">`
-        :`<div class="print-thumb" style="background:linear-gradient(155deg,var(--violet),#2a2150)"></div>`;
-      return `<div class="print-row">
-        ${thumb}
-        <div class="print-info">
-          <div class="print-code">${p.printId}</div>
-          <div class="print-illust">${p.illustLabel}</div>
-          <div class="rarity-badges">${badges}</div>
-        </div>
-        <div style="display:flex;flex-direction:column;gap:5px;flex-shrink:0">
-          <button class="sb-btn sb-in" data-ci="${ci}" data-pi="${pi}">＋입고</button>
-          <button class="sb-btn sb-out" data-ci="${ci}" data-pi="${pi}">－출고</button>
-        </div>
-      </div>`;
-    }).join('');
-    return `<div class="card-group">
-      <div class="group-header">
-        ${mainImg?`<img src="${mainImg}" alt="${card.name}">`:''}
-        <div>
-          <div class="group-name">${card.name}</div>
-          <div style="font-size:11px;color:var(--text-dim)">${card.type||''} · ${prints.length}가지 인쇄판</div>
-        </div>
-      </div>${printRows}</div>`;
-  }).join('');
-  el.querySelectorAll('.sb-btn').forEach(btn=>{
-    btn.addEventListener('click',()=>{
-      const {ci,pi}=btn.dataset;
-      const {card,prints}=_searchCardMap[ci];
-      setMode(btn.classList.contains('sb-in')?'in':'out');
-      openSheet(card,prints,prints[pi].printId,true);
-    });
-  });
-}
-
-/* ==========================================================================
-   로그
-   ========================================================================== */
-function renderLog(){
-  const tx=DB.getTx();
-  const el=document.getElementById('logList');
-  if(!tx.length){el.innerHTML='<div class="empty">아직 거래 기록이 없어</div>';return;}
-  el.innerHTML=tx.map(t=>{
-    const time=new Date(t.timestamp).toLocaleString('ko-KR',{month:'numeric',day:'numeric',hour:'2-digit',minute:'2-digit'});
-    return `<div class="log-row">
-      <div>
-        <span class="tag ${t.type}">${t.type==='in'?'입고':'출고'}</span>${t.cardName} ${t.amount}장
-        <div class="log-sub">${t.printId} · ${t.rarity} → 잔여 ${t.resultQty}장</div>
-      </div>
-      <div class="log-time">${time}</div>
-    </div>`;
-  }).join('');
-}
-
-/* ==========================================================================
-   후보 카드 선택 시트
-   ========================================================================== */
-const candidateOverlay = document.getElementById('candidateOverlay');
-
-function openCandidateSheet(cards, detectedCode){
-  overlayOpen = true;
-  const list = document.getElementById('candidateList');
-  list.innerHTML = cards.slice(0,8).map((card,i) => {
-    const img = card.card_images?.[0]?.image_url_small || '';
-    return `<div class="candidate-row" data-i="${i}">
-      ${img ? `<img src="${img}" class="print-thumb">` : '<div class="print-thumb"></div>'}
-      <div class="print-info">
-        <div style="font-weight:700;font-size:14px;">${card.name}</div>
-        <div style="font-size:11px;color:var(--text-dim)">${card.type||''}</div>
-      </div>
-    </div>`;
-  }).join('');
-
-  list.querySelectorAll('.candidate-row').forEach(row => {
-    row.addEventListener('click', () => {
-      const card = cards[parseInt(row.dataset.i)];
-      candidateOverlay.classList.remove('show');
-      overlayOpen = false;
-      const prints = parsePrints(card);
-      const detectedPrint = prints.find(p => p.printId === detectedCode) || prints[0];
-      openSheet(card, prints, detectedPrint.printId);
-    });
-  });
-
-  candidateOverlay.classList.add('show');
-}
-
-document.getElementById('candidateCancelBtn').addEventListener('click', () => {
-  candidateOverlay.classList.remove('show');
-  overlayOpen = false;
-  startCooldown(1500);
-});
-
-/* ==========================================================================
-   수동 등록 시트
-   ========================================================================== */
-let _manualCode='';
-const manualOverlay=document.getElementById('manualOverlay');
-
-function openManualSheet(code){
-  _manualCode=code;
-  document.getElementById('manualCodeLabel').textContent=code;
-  document.getElementById('manualCardName').value='';
-  document.getElementById('manualIllustLabel').value=code.replace(/-[A-Z]{0,2}\d+$/,'')||code;
-  document.getElementById('manualRarities').value='울트라레어';
-  manualOverlay.classList.add('show');
-  overlayOpen=true;
-  setTimeout(()=>document.getElementById('manualCardName').focus(),300);
-}
-
-function closeManualSheet(){
-  manualOverlay.classList.remove('show');
-  overlayOpen=false;
-  startCooldown(1500);
-}
-
-document.getElementById('manualCancelBtn').addEventListener('click', closeManualSheet);
-
-document.getElementById('manualSaveBtn').addEventListener('click',()=>{
-  const cardName=document.getElementById('manualCardName').value.trim();
-  const illustLabel=document.getElementById('manualIllustLabel').value.trim();
-  const raritiesRaw=document.getElementById('manualRarities').value.trim();
-  if(!cardName){ showToast('카드명을 입력해줘'); return; }
-
-  const rarities=raritiesRaw.split(',').map(r=>r.trim()).filter(Boolean);
-  if(!rarities.length){ showToast('레어도를 입력해줘'); return; }
-
-  // 커스텀 카드 저장
-  const entry={ cardName, printId:_manualCode, illustLabel:illustLabel||_manualCode, rarities };
-  DB.saveCustomCard(_manualCode, entry);
-
-  // 바로 입출고 모달로 연결
-  manualOverlay.classList.remove('show');
-  const cardObj=buildCustomCard(entry);
-  const prints=parsePrints(cardObj);
-  // 커스텀 카드는 수동 입력한 레어도 사용
-  prints[0].rarities=rarities;
-  openSheet(cardObj, prints, _manualCode);
-  showToast(`"${cardName}" 등록 완료 — 다음부터는 자동으로 인식돼`);
-});
-
-/* ==========================================================================
-   탭 / 토스트
-   ========================================================================== */
-document.querySelectorAll('.tab-btn').forEach(btn=>{
-  btn.addEventListener('click',()=>{
-    document.querySelectorAll('.tab-btn').forEach(b=>b.classList.remove('active'));
-    btn.classList.add('active');
-    document.querySelectorAll('.screen').forEach(s=>s.classList.remove('active'));
-    document.getElementById('screen-'+btn.dataset.screen).classList.add('active');
-    if(btn.dataset.screen==='log') renderLog();
-  });
-});
-
-const toastEl=document.getElementById('toast');
-let toastTimer=null;
-function showToast(msg){
-  toastEl.textContent=msg;toastEl.classList.add('show');
-  clearTimeout(toastTimer);
-  toastTimer=setTimeout(()=>toastEl.classList.remove('show'),2600);
-}
-
-renderLog();
-updateUsageDisplay(DB.getUsage().count);
-</script>
+    init();
+  </script>
 </body>
 </html>
