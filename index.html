@@ -285,6 +285,7 @@
       display: flex;
       gap: 8px;
       flex-wrap: wrap;
+      align-items: center;
     }
 
     .suggestion {
@@ -294,6 +295,19 @@
       border-radius: 999px;
       padding: 7px 10px;
       font-size: 13px;
+    }
+
+    .suggestion.best {
+      background: #e9f8f0;
+      color: var(--green);
+      border-color: #a7dfbf;
+    }
+
+    .suggestion-label {
+      width: 100%;
+      color: var(--muted);
+      font-size: 12px;
+      font-weight: 800;
     }
 
     .inventory-tools {
@@ -568,11 +582,18 @@
 
     const cards = [
       "푸른 눈의 백룡",
+      "푸른 눈의 아백룡",
+      "푸른 눈의 제트 드래곤",
       "블랙 매지션",
       "블랙 매지션 걸",
+      "매지션즈 소울즈",
+      "일루전 오브 카오스",
       "붉은 눈의 흑룡",
       "증식의 G",
       "하루 우라라",
+      "저택 와라시",
+      "유령토끼",
+      "드롤 & 로크 버드",
       "무한포영",
       "말살의 지명자",
       "무덤의 지명자",
@@ -587,9 +608,81 @@
       "네가로기어 아제우스",
       "티아라멘츠 키토칼로스",
       "섬도희 카가리",
+      "섬도기동 인게이지",
+      "섬도희 레이",
       "알버스의 낙윤",
-      "낙인융합"
+      "낙인융합",
+      "데스피아의 도화 알베르",
+      "빙검룡 미라제이드",
+      "플뢰르 드 바로네스",
+      "크리스탈윙 싱크로 드래곤",
+      "바렐로드 새비지 드래곤",
+      "혼돈마룡 카오스 룰러",
+      "초마도용기사 붉은 눈의 드라군",
+      "엘드리치",
+      "트라이브리게이드 흉조 슈라이그",
+      "아다마시아 라이즈 드라가이트",
+      "엑소시스터 마니피카",
+      "비서스 스타프로스트",
+      "크샤트리라 펜리르",
+      "크샤트리라 유니콘",
+      "티아라멘츠 셰이렌",
+      "티아라멘츠 레이노하트",
+      "스프라이트 블루",
+      "스프라이트 엘프",
+      "용사 토큰",
+      "성전의 수견사",
+      "아라메시아의 의",
+      "라이트닝 스톰",
+      "금지된 일적",
+      "삼전의 재",
+      "삼전의 호",
+      "욕망과 졸부의 항아리",
+      "욕망과 탐욕의 항아리",
+      "졸부와 겸허의 항아리",
+      "길항승부",
+      "레드 리부트",
+      "신의 심판",
+      "신의 통고",
+      "인스펙트 보더"
     ];
+
+    const cardAliases = new Map([
+      ["푸른 눈의 백룡", ["블루아이즈", "블루 아이즈", "푸른눈 백룡", "푸백", "파란눈의 백룡"]],
+      ["푸른 눈의 아백룡", ["아백룡", "푸른눈 아백룡", "블루아이즈 얼터너티브"]],
+      ["블랙 매지션", ["블매", "블랙매지션", "블랙 마술사", "검은 마술사"]],
+      ["블랙 매지션 걸", ["블매걸", "블랙매지션걸", "매지션 걸", "블랙 마술사 걸"]],
+      ["증식의 G", ["증식의 지", "증지", "증g", "증식지", "맥시멈 씨", "맥시씨", "맥시 시"]],
+      ["하루 우라라", ["우라라", "하루우라라", "하루라라", "애쉬", "애쉬 블라섬"]],
+      ["저택 와라시", ["와라시", "저택와라시", "고스트 벨"]],
+      ["유령토끼", ["유령 토끼", "토끼", "고스트 오거"]],
+      ["드롤 & 로크 버드", ["드롤", "드롤 로크", "드롤 앤 로크", "드롤락", "드롤락버드"]],
+      ["무한포영", ["무한 포영", "무포", "인피니트 임퍼머넌스"]],
+      ["말살의 지명자", ["말명자", "말살 지명자"]],
+      ["무덤의 지명자", ["무명자", "무덤 지명자"]],
+      ["원시생명체 니비루", ["니비루", "원시 생명체 니비루"]],
+      ["해피의 깃털", ["해피 깃털", "해깃", "해피의깃털"]],
+      ["소명의 신궁 아폴로우사", ["아폴로우사", "아폴로사", "소명의신궁"]],
+      ["네가로기어 아제우스", ["아제우스", "네가로기어", "제우스"]],
+      ["섬도기동 인게이지", ["인게이지", "섬도 인게이지"]],
+      ["섬도희 카가리", ["카가리"]],
+      ["섬도희 레이", ["레이", "섬도 레이"]],
+      ["낙인융합", ["낙융", "낙인 융합"]],
+      ["데스피아의 도화 알베르", ["알베르", "데스피아 알베르"]],
+      ["빙검룡 미라제이드", ["미라제이드", "빙검룡"]],
+      ["플뢰르 드 바로네스", ["바로네스", "플뢰르드바로네스", "바로니스"]],
+      ["초마도용기사 붉은 눈의 드라군", ["드라군", "붉은 눈 드라군", "초마도용기사"]],
+      ["크샤트리라 펜리르", ["펜리르", "크샤 펜리르"]],
+      ["크샤트리라 유니콘", ["유니콘", "크샤 유니콘"]],
+      ["스프라이트 블루", ["스프 블루", "스프라이트블루"]],
+      ["스프라이트 엘프", ["스프 엘프", "스프라이트엘프"]],
+      ["라이트닝 스톰", ["라스톰", "라이트닝스톰"]],
+      ["금지된 일적", ["일적", "금지 일적"]],
+      ["삼전의 재", ["삼전재", "삼재"]],
+      ["삼전의 호", ["삼전호", "삼호"]],
+      ["길항승부", ["길항", "이븐리 매치드"]],
+      ["인스펙트 보더", ["보더", "인스펙터 보더"]]
+    ]);
 
     const rarityOptions = [
       "Common",
@@ -795,6 +888,42 @@
       return text.toLowerCase().replace(/\s+/g, " ").trim();
     }
 
+    function normalizeCardText(text) {
+      return normalize(text)
+        .replace(/&/g, "앤")
+        .replace(/[^\u3131-\u318e\uac00-\ud7a3a-z0-9]/g, "")
+        .replace(/드래곤/g, "드레곤")
+        .replace(/매지션/g, "메지션")
+        .replace(/블랙/g, "블렉")
+        .replace(/크샤트리라/g, "크샤")
+        .replace(/티아라멘츠/g, "티아라")
+        .replace(/스프라이트/g, "스프")
+        .replace(/증식의지/g, "증식의g")
+        .replace(/증식지/g, "증식의g")
+        .replace(/증지/g, "증식의g")
+        .replace(/지$/g, "g");
+    }
+
+    function stripCommandWords(text) {
+      const removals = [
+        ...rarityAliases.flatMap((item) => item.words),
+        ...conditionAliases.flatMap((item) => item.words),
+        ...actionAliases.flatMap((item) => item.words),
+        "레어", "한국어", "일본어", "영어", "카드", "좀", "으로"
+      ];
+
+      let cleaned = text
+        .replace(/\d+\s*(장|개|매)/g, "")
+        .replace(/[한하나일두둘이세셋삼네넷사다섯오여섯육일곱칠여덟팔아홉구열십]+\s*(장|개|매)/g, "")
+        .trim();
+
+      for (const word of removals) {
+        cleaned = cleaned.replace(new RegExp(escapeRegExp(word), "gi"), "");
+      }
+
+      return cleaned.replace(/\s+/g, " ").trim();
+    }
+
     function parseTranscript() {
       const text = $("transcript").value.trim();
       const normalized = normalize(text);
@@ -807,7 +936,8 @@
       const condition = findAlias(normalized, conditionAliases) || "NM";
       const action = findAlias(normalized, actionAliases) || "add";
       const quantity = findQuantity(normalized);
-      const cardName = findCardName(text, normalized);
+      const candidates = suggestCards(text, 5);
+      const cardName = findCardName(text, normalized, candidates);
 
       $("rarity").value = rarity;
       $("condition").value = condition;
@@ -815,8 +945,8 @@
       $("quantity").value = quantity;
       $("cardName").value = cardName;
 
-      updateSuggestions();
-      setStatus(cardName ? "해석 결과를 확인한 뒤 재고에 반영하세요." : "카드명을 찾지 못했습니다. 카드명을 직접 선택하거나 입력하세요.");
+      updateSuggestions(candidates);
+      setStatus(cardName ? `가장 가까운 후보는 "${cardName}"입니다. 맞으면 재고에 반영하세요.` : "카드명을 찾지 못했습니다. 아래 후보를 선택하거나 카드명을 직접 입력하세요.");
     }
 
     function findAlias(text, groups) {
@@ -844,7 +974,7 @@
       return 1;
     }
 
-    function findCardName(rawText, normalized) {
+    function findCardName(rawText, normalized, candidates = []) {
       const direct = cards.find((card) => normalized.includes(normalize(card)));
       if (direct) {
         return direct;
@@ -856,29 +986,33 @@
         return compact;
       }
 
-      const cleaned = rawText
-        .replace(/\d+\s*(장|개|매)/g, "")
-        .replace(/[한하나일두둘이세셋삼네넷사다섯오여섯육일곱칠여덟팔아홉구열십]+\s*(장|개|매)/g, "")
-        .trim();
+      for (const [card, aliases] of cardAliases) {
+        if (aliases.some((alias) => normalizeCardText(rawText).includes(normalizeCardText(alias)))) {
+          return card;
+        }
+      }
 
-      const removals = [
-        ...rarityAliases.flatMap((item) => item.words),
-        ...conditionAliases.flatMap((item) => item.words),
-        ...actionAliases.flatMap((item) => item.words),
-        "레어", "한국어", "일본어", "영어"
-      ];
+      if (candidates.length && candidates[0].score >= 42) {
+        return candidates[0].card;
+      }
 
-      return removals.reduce((name, word) => (
-        name.replace(new RegExp(escapeRegExp(word), "gi"), "")
-      ), cleaned).replace(/\s+/g, " ").trim();
+      return stripCommandWords(rawText);
     }
 
-    function updateSuggestions() {
-      const input = $("cardName").value.trim();
-      const matches = suggestCards(input);
-      $("suggestions").innerHTML = matches.map((card) => (
-        `<button class="suggestion" type="button" data-card="${card}">${card}</button>`
-      )).join("");
+    function updateSuggestions(precomputed = null) {
+      const input = $("cardName").value.trim() || $("transcript").value.trim();
+      const matches = precomputed || suggestCards(input, 6);
+      $("suggestions").innerHTML = [
+        `<div class="suggestion-label">비슷한 카드 후보</div>`,
+        ...matches.map((item, index) => (
+          `<button class="suggestion ${index === 0 ? "best" : ""}" type="button" data-card="${escapeHtml(item.card)}">${escapeHtml(item.card)}</button>`
+        ))
+      ].join("");
+
+      if (!matches.length) {
+        $("suggestions").innerHTML = `<div class="suggestion-label">비슷한 카드 후보가 없습니다.</div>`;
+        return;
+      }
 
       document.querySelectorAll("[data-card]").forEach((button) => {
         button.addEventListener("click", () => {
@@ -888,30 +1022,87 @@
       });
     }
 
-    function suggestCards(input) {
+    function suggestCards(input, limit = 5) {
       if (!input) {
-        return cards.slice(0, 5);
+        return cards.slice(0, limit).map((card) => ({ card, score: 1 }));
       }
-      const q = normalize(input).replace(/\s/g, "");
+
+      const cleaned = stripCommandWords(input);
+      const q = normalizeCardText(cleaned || input);
       return cards
-        .map((card) => ({ card, score: similarity(q, normalize(card).replace(/\s/g, "")) }))
-        .sort((a, b) => b.score - a.score)
-        .slice(0, 5)
-        .filter((item) => item.score > 0)
-        .map((item) => item.card);
+        .map((card) => ({ card, score: cardScore(q, card) }))
+        .sort((a, b) => b.score - a.score || a.card.localeCompare(b.card, "ko"))
+        .slice(0, limit)
+        .filter((item) => item.score > 8);
+    }
+
+    function cardScore(query, card) {
+      const cardKey = normalizeCardText(card);
+      const aliases = (cardAliases.get(card) || []).map(normalizeCardText);
+      const keys = [cardKey, ...aliases];
+      return Math.max(...keys.map((key) => similarity(query, key)));
     }
 
     function similarity(a, b) {
-      if (b.includes(a) || a.includes(b)) {
-        return Math.max(a.length, b.length) + 8;
+      if (!a || !b) {
+        return 0;
       }
+
+      if (b.includes(a) || a.includes(b)) {
+        return Math.max(a.length, b.length) * 6 + 30;
+      }
+
+      const distance = levenshtein(a, b);
+      const maxLength = Math.max(a.length, b.length);
+      const editScore = Math.max(0, 32 - Math.round((distance / maxLength) * 32));
+      const charScore = sharedCharacterScore(a, b);
+      const orderScore = orderedSubsequenceScore(a, b);
+      return editScore + charScore + orderScore;
+    }
+
+    function sharedCharacterScore(a, b) {
       let score = 0;
       for (const char of new Set(a)) {
         if (b.includes(char)) {
-          score += 1;
+          score += 3;
         }
       }
       return score;
+    }
+
+    function orderedSubsequenceScore(a, b) {
+      let score = 0;
+      let cursor = 0;
+      for (const char of a) {
+        const index = b.indexOf(char, cursor);
+        if (index >= 0) {
+          score += 2;
+          cursor = index + 1;
+        }
+      }
+      return score;
+    }
+
+    function levenshtein(a, b) {
+      const previous = Array.from({ length: b.length + 1 }, (_, index) => index);
+      const current = Array.from({ length: b.length + 1 }, () => 0);
+
+      for (let i = 1; i <= a.length; i += 1) {
+        current[0] = i;
+        for (let j = 1; j <= b.length; j += 1) {
+          const cost = a[i - 1] === b[j - 1] ? 0 : 1;
+          current[j] = Math.min(
+            current[j - 1] + 1,
+            previous[j] + 1,
+            previous[j - 1] + cost
+          );
+        }
+        for (let j = 0; j <= b.length; j += 1) {
+          previous[j] = current[j];
+        }
+      }
+
+      return previous[b.length];
     }
 
     function saveParsed() {
