@@ -487,10 +487,28 @@
     };
     recognition.onspeechstart = () => { heardSpeech = true; setStatus("음성 감지됨."); };
     recognition.onresult = event => {
-      let text = "";
-      for (let i = 0; i < event.results.length; i++) text += event.results[i][0].transcript;
-      const t = text.trim();
-      if (t) { $("transcript").value = t; parseTranscript(); }
+      // 모든 결과의 모든 alternatives 수집
+      const allTranscripts = [];
+      for (let i = 0; i < event.results.length; i++) {
+        const result = event.results[i];
+        for (let j = 0; j < result.length; j++) {
+          const t = result[j].transcript.trim();
+          if (t) allTranscripts.push({ text: t, confidence: result[j].confidence || 0, isFinal: result[i].isFinal });
+        }
+      }
+      if (!allTranscripts.length) return;
+
+      // 실시간 표시는 confidence 가장 높은 것
+      const best = allTranscripts.sort((a,b) => b.confidence - a.confidence)[0];
+      $("transcript").value = best.text;
+
+      // final 결과가 있으면 모든 후보로 퍼지 매칭해서 최고점 카드 선택
+      const finals = allTranscripts.filter(t => t.isFinal);
+      if (finals.length) {
+        parseBestFromAlternatives(finals.map(t => t.text));
+      } else {
+        parseTranscript(); // interim은 일단 현재 텍스트로만
+      }
     };
     recognition.onerror = event => {
       listening = false; clearTimeout(silenceTimer);
@@ -518,6 +536,42 @@
       "aborted": "음성 인식이 중단되었습니다."
     };
     return m[error] || `음성 인식 오류: ${error}`;
+  }
+
+  /* ── 여러 음성 후보에서 최고 매칭 카드 선택 ── */
+  function parseBestFromAlternatives(transcripts) {
+    let bestCard = null, bestScore = -1, bestTranscript = transcripts[0];
+    let bestRarity = "", bestQuantity = 1, bestAction = "add";
+
+    transcripts.forEach(text => {
+      const normalized = normalize(text);
+      const candidates = suggestCards(text, 3);
+      const cardName = findCardName(text, normalized, candidates);
+      const score = candidates.length ? candidates[0].score : 0;
+
+      if (score > bestScore) {
+        bestScore = score;
+        bestCard = cardName;
+        bestTranscript = text;
+        bestRarity = findAlias(normalized, rarityAliases) || "";
+        bestQuantity = findQuantity(normalized);
+        bestAction = findAlias(normalized, actionAliases) || "add";
+      }
+    });
+
+    // 결과 반영
+    $("transcript").value = bestTranscript;
+    if (bestCard) $("cardName").value = bestCard;
+    if (bestRarity) $("rarity").value = bestRarity;
+    $("quantity").value = bestQuantity;
+    $("action").value = bestAction;
+
+    updateSuggestions(suggestCards(bestTranscript, 5));
+    if (bestCard) {
+      updateRarityFromAPI(bestCard);
+    } else {
+      setStatus("카드명을 찾지 못했습니다. 후보를 선택하거나 직접 입력해주세요.");
+    }
   }
 
   /* ── 파싱 ── */
