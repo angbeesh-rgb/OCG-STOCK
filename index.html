@@ -646,6 +646,8 @@
 
     let recognition = null;
     let listening = false;
+    let heardSpeech = false;
+    let silenceTimer = null;
     let inventory = loadInventory();
 
     const $ = (id) => document.getElementById(id);
@@ -671,6 +673,7 @@
       $("micBtn").addEventListener("click", toggleMic);
       $("parseBtn").addEventListener("click", parseTranscript);
       $("saveBtn").addEventListener("click", saveParsed);
+      $("transcript").addEventListener("input", parseTranscript);
       $("search").addEventListener("input", renderInventory);
       $("clearBtn").addEventListener("click", clearInventory);
       $("cardName").addEventListener("input", updateSuggestions);
@@ -697,32 +700,65 @@
       recognition.lang = "ko-KR";
       recognition.interimResults = true;
       recognition.continuous = false;
+      recognition.maxAlternatives = 3;
 
       recognition.onstart = () => {
         listening = true;
+        heardSpeech = false;
         $("micBtn").classList.add("listening");
         $("micLabel").textContent = "듣는 중";
-        setStatus("듣고 있습니다.");
+        setStatus("듣고 있습니다. 말이 끝나면 자동으로 해석합니다.");
+        clearTimeout(silenceTimer);
+        silenceTimer = setTimeout(() => {
+          if (listening && !heardSpeech) {
+            setStatus("아직 음성이 감지되지 않았습니다. 마이크 권한, 입력 장치, 브라우저 음성 인식 지원을 확인해주세요.");
+          }
+        }, 4500);
+      };
+
+      recognition.onaudiostart = () => {
+        setStatus("마이크 입력을 받는 중입니다.");
+      };
+
+      recognition.onspeechstart = () => {
+        heardSpeech = true;
+        setStatus("음성을 감지했습니다.");
       };
 
       recognition.onresult = (event) => {
         let text = "";
-        for (let i = event.resultIndex; i < event.results.length; i += 1) {
+        for (let i = 0; i < event.results.length; i += 1) {
           text += event.results[i][0].transcript;
         }
-        $("transcript").value = text.trim();
-        parseTranscript();
+        const nextText = text.trim();
+        if (nextText) {
+          $("transcript").value = nextText;
+          parseTranscript();
+        }
+      };
+
+      recognition.onnomatch = () => {
+        setStatus("음성을 들었지만 문장으로 변환하지 못했습니다. 조금 더 천천히 말하거나 직접 입력해보세요.");
       };
 
       recognition.onerror = (event) => {
-        setStatus(`음성 인식 오류: ${event.error}`);
+        listening = false;
+        clearTimeout(silenceTimer);
+        $("micBtn").classList.remove("listening");
+        $("micLabel").textContent = "말하기";
+        setStatus(speechErrorMessage(event.error));
       };
 
       recognition.onend = () => {
         listening = false;
+        clearTimeout(silenceTimer);
         $("micBtn").classList.remove("listening");
         $("micLabel").textContent = "말하기";
-        parseTranscript();
+        if ($("transcript").value.trim()) {
+          parseTranscript();
+        } else if (!heardSpeech) {
+          setStatus("음성 입력이 비어 있습니다. 다시 말하기를 누르거나 문장을 직접 입력해주세요.");
+        }
       };
     }
 
@@ -735,8 +771,24 @@
       if (listening) {
         recognition.stop();
       } else {
-        recognition.start();
+        try {
+          recognition.start();
+        } catch (error) {
+          setStatus("음성 인식이 이미 시작 중입니다. 잠시 후 다시 눌러주세요.");
+        }
       }
+    }
+
+    function speechErrorMessage(error) {
+      const messages = {
+        "not-allowed": "마이크 권한이 차단되었습니다. 브라우저 주소창의 권한 설정에서 마이크를 허용해주세요.",
+        "service-not-allowed": "이 브라우저 또는 환경에서 음성 인식 서비스가 차단되었습니다. Chrome 또는 Edge의 HTTPS 페이지에서 다시 시도해주세요.",
+        "no-speech": "음성이 감지되지 않았습니다. 마이크 가까이에서 다시 말해보세요.",
+        "audio-capture": "마이크 입력 장치를 찾지 못했습니다. 기기의 마이크 설정을 확인해주세요.",
+        "network": "브라우저 음성 인식 서비스 연결에 실패했습니다. 네트워크 상태를 확인하거나 직접 입력을 사용해주세요.",
+        "aborted": "음성 인식이 중단되었습니다. 다시 말하기를 눌러주세요."
+      };
+      return messages[error] || `음성 인식 오류: ${error}`;
     }
 
     function normalize(text) {
