@@ -55,7 +55,7 @@
     header {
       display: flex;
       align-items: flex-end;
-      justify-content: space-between;
+      justify-content: flex-start;
       gap: 18px;
       padding: 10px 0 22px;
     }
@@ -73,36 +73,9 @@
       font-size: 15px;
     }
 
-    .stats {
-      display: grid;
-      grid-template-columns: repeat(3, minmax(88px, 1fr));
-      gap: 8px;
-      min-width: min(390px, 100%);
-    }
-
-    .stat {
-      background: rgba(255,255,255,.82);
-      border: 1px solid var(--line);
-      border-radius: 8px;
-      padding: 10px 12px;
-    }
-
-    .stat strong {
-      display: block;
-      font-size: 22px;
-      line-height: 1;
-    }
-
-    .stat span {
-      display: block;
-      margin-top: 5px;
-      color: var(--muted);
-      font-size: 12px;
-    }
-
     main {
       display: grid;
-      grid-template-columns: minmax(0, 1fr) 390px;
+      grid-template-columns: minmax(0, 1fr);
       gap: 18px;
       align-items: start;
     }
@@ -202,13 +175,6 @@
       gap: 8px;
       flex-wrap: wrap;
       align-items: center;
-    }
-
-    .examples {
-      margin-top: 14px;
-      display: flex;
-      gap: 8px;
-      flex-wrap: wrap;
     }
 
     .chip {
@@ -399,37 +365,10 @@
       min-height: 19px;
     }
 
-    .side-list {
-      display: grid;
-      gap: 10px;
-    }
-
-    .alias {
-      display: flex;
-      justify-content: space-between;
-      gap: 12px;
-      border-bottom: 1px solid var(--line);
-      padding: 8px 0;
-      font-size: 13px;
-    }
-
-    .alias:last-child {
-      border-bottom: 0;
-    }
-
-    .alias span {
-      color: var(--muted);
-      text-align: right;
-    }
-
     @media (max-width: 920px) {
       header, main {
         display: grid;
         grid-template-columns: 1fr;
-      }
-
-      .stats {
-        min-width: 0;
       }
     }
 
@@ -469,11 +408,6 @@
         <h1>말로 등록하는 유희왕 재고</h1>
         <p class="subtitle">카드명, 레어도, 수량, 상태를 말하면 재고 초안으로 변환합니다.</p>
       </div>
-      <div class="stats" aria-label="재고 요약">
-        <div class="stat"><strong id="totalCards">0</strong><span>총 장수</span></div>
-        <div class="stat"><strong id="uniqueCards">0</strong><span>고유 항목</span></div>
-        <div class="stat"><strong id="rareCards">0</strong><span>고레어</span></div>
-      </div>
     </header>
 
     <main>
@@ -481,7 +415,6 @@
         <div class="section-head">
           <h2>음성 등록</h2>
           <div class="row">
-            <button class="secondary" id="parseBtn" type="button">해석</button>
             <button class="primary" id="saveBtn" type="button">재고 반영</button>
           </div>
         </div>
@@ -496,11 +429,7 @@
             <textarea id="transcript" placeholder="예: 푸른 눈의 백룡 시크릿 레어 세 장 니어민트 추가"></textarea>
           </div>
 
-          <div class="examples">
-            <button class="chip" type="button" data-example="푸른 눈의 백룡 시크릿 레어 세 장 니어민트 추가">푸른 눈의 백룡 시크릿 레어 세 장</button>
-            <button class="chip" type="button" data-example="증식의 지 슈퍼 레어 두 장 판매">증식의 G 슈퍼 레어 두 장 판매</button>
-            <button class="chip" type="button" data-example="블랙 매지션 울트라 한 장 라이트 플레이드">블랙 매지션 울트라 한 장</button>
-          </div>
+          <div class="suggestions" id="suggestions"></div>
 
           <div class="parse-grid">
             <label>카드명
@@ -537,7 +466,6 @@
               </select>
             </label>
           </div>
-          <div class="suggestions" id="suggestions"></div>
           <div class="status" id="status"></div>
         </div>
 
@@ -567,12 +495,6 @@
         </div>
       </div>
 
-      <aside class="section">
-        <div class="section-head">
-          <h2>레어도 별칭</h2>
-        </div>
-        <div class="body side-list" id="aliasList"></div>
-      </aside>
     </main>
   </div>
 
@@ -759,24 +681,12 @@
         $("cardNames").appendChild(option);
       });
 
-      $("aliasList").innerHTML = rarityAliases.map((item) => (
-        `<div class="alias"><strong>${item.value}</strong><span>${item.words.join(", ")}</span></div>`
-      )).join("");
-
       $("micBtn").addEventListener("click", toggleMic);
-      $("parseBtn").addEventListener("click", parseTranscript);
       $("saveBtn").addEventListener("click", saveParsed);
       $("transcript").addEventListener("input", parseTranscript);
       $("search").addEventListener("input", renderInventory);
       $("clearBtn").addEventListener("click", clearInventory);
       $("cardName").addEventListener("input", updateSuggestions);
-
-      document.querySelectorAll("[data-example]").forEach((button) => {
-        button.addEventListener("click", () => {
-          $("transcript").value = button.dataset.example;
-          parseTranscript();
-        });
-      });
 
       setupSpeech();
       renderInventory();
@@ -857,7 +767,7 @@
 
     function toggleMic() {
       if (!recognition) {
-        setStatus("마이크 대신 문장을 입력하고 해석 버튼을 눌러주세요.");
+        setStatus("마이크 대신 문장을 입력하면 자동으로 분석됩니다.");
         return;
       }
 
@@ -1188,7 +1098,6 @@
       });
 
       $("empty").style.display = rows.length ? "none" : "block";
-      renderStats();
     }
 
     function adjustQuantity(target, delta) {
@@ -1203,17 +1112,6 @@
       }
       saveInventory();
       renderInventory();
-    }
-
-    function renderStats() {
-      const total = inventory.reduce((sum, item) => sum + item.quantity, 0);
-      const high = inventory
-        .filter((item) => isHighRarity(item.rarity))
-        .reduce((sum, item) => sum + item.quantity, 0);
-
-      $("totalCards").textContent = total;
-      $("uniqueCards").textContent = inventory.length;
-      $("rareCards").textContent = high;
     }
 
     function clearInventory() {
