@@ -1,0 +1,834 @@
+<!doctype html>
+<html lang="ko">
+<head>
+  <meta charset="utf-8">
+  <meta name="viewport" content="width=device-width, initial-scale=1">
+  <title>음성인식 OCG 재고관리</title>
+  <style>
+    :root {
+      color-scheme: light;
+      --ink: #18212f; --muted: #667085; --line: #d7dee9;
+      --panel: #ffffff; --soft: #f5f7fb;
+      --brand: #2563eb; --brand-dark: #1d4ed8;
+      --green: #178a54; --red: #c2413b; --gold: #b58117;
+      --shadow: 0 18px 45px rgba(24,33,47,.12);
+    }
+    * { box-sizing: border-box; }
+    body {
+      margin: 0;
+      font-family: ui-sans-serif, system-ui, -apple-system, "Segoe UI", sans-serif;
+      color: var(--ink);
+      background:
+        linear-gradient(180deg, rgba(255,255,255,.9), rgba(245,247,251,.96)),
+        radial-gradient(circle at 15% 0%, rgba(37,99,235,.16), transparent 34%),
+        radial-gradient(circle at 86% 12%, rgba(181,129,23,.13), transparent 30%),
+        #f5f7fb;
+      min-height: 100vh;
+    }
+    button, input, select, textarea { font: inherit; }
+    button { border: 0; cursor: pointer; }
+
+    .app { width: min(960px, calc(100% - 24px)); margin: 0 auto; padding: 20px 0 40px; }
+
+    header { padding: 8px 0 18px; }
+    h1 { margin: 0; font-size: clamp(22px, 3.5vw, 36px); line-height: 1.1; }
+    .subtitle { margin: 6px 0 0; color: var(--muted); font-size: 14px; }
+
+    /* 탭 */
+    .tabs { display: flex; gap: 0; border-bottom: 2px solid var(--line); margin-bottom: 18px; }
+    .tab-btn {
+      padding: 10px 20px; background: none; border: none; font-size: 14px; font-weight: 700;
+      color: var(--muted); border-bottom: 2px solid transparent; margin-bottom: -2px; cursor: pointer;
+    }
+    .tab-btn.active { color: var(--brand); border-bottom-color: var(--brand); }
+    .tab-pane { display: none; }
+    .tab-pane.active { display: block; }
+
+    .section {
+      background: rgba(255,255,255,.9); border: 1px solid var(--line);
+      border-radius: 8px; box-shadow: var(--shadow); overflow: hidden;
+    }
+    .section-head {
+      display: flex; align-items: center; justify-content: space-between;
+      gap: 12px; padding: 14px 16px; border-bottom: 1px solid var(--line);
+      background: rgba(245,247,251,.72);
+    }
+    h2 { margin: 0; font-size: 16px; }
+    .body { padding: 16px; }
+
+    /* 음성 패드 — 카드 이미지 + 말하기 1:1 */
+    .voice-pad {
+      display: grid;
+      grid-template-columns: 1fr 1fr;
+      gap: 14px;
+      align-items: stretch;
+    }
+    .card-preview-wrap {
+      border-radius: 8px; border: 1px solid var(--line);
+      background: var(--soft); display: flex; align-items: center;
+      justify-content: center; min-height: 90px; overflow: hidden;
+    }
+    .card-preview-wrap img { width: 100%; height: 100%; object-fit: contain; display: block; }
+    .card-preview-placeholder { color: var(--muted); font-size: 13px; text-align: center; padding: 16px; }
+
+    .mic {
+      min-height: 90px; border-radius: 8px;
+      background: var(--brand); color: #fff;
+      display: grid; place-items: center;
+      box-shadow: inset 0 -12px 28px rgba(0,0,0,.14);
+      transition: transform .12s ease, background .12s ease;
+    }
+    .mic:active { transform: translateY(1px); }
+    .mic.listening { background: var(--red); }
+    .mic-mark { display: grid; gap: 7px; place-items: center; font-weight: 800; }
+    .mic-symbol {
+      width: 40px; height: 40px; border-radius: 50%;
+      border: 3px solid currentColor; display: grid;
+      place-items: center; font-size: 22px; line-height: 1;
+    }
+
+    textarea {
+      width: 100%; min-height: 44px; max-height: 80px;
+      resize: none; border: 1px solid var(--line);
+      border-radius: 8px; padding: 10px 12px;
+      color: var(--ink); background: #fff; outline: none;
+      font-size: 14px; line-height: 1.5;
+    }
+    textarea:focus { border-color: var(--brand); box-shadow: 0 0 0 3px rgba(37,99,235,.14); }
+
+    .suggestions {
+      margin-top: 10px; display: flex; gap: 7px;
+      flex-wrap: wrap; align-items: center;
+    }
+    .suggestion {
+      border: 1px solid #c8d7f5; background: #f4f7ff; color: var(--brand-dark);
+      border-radius: 999px; padding: 5px 10px; font-size: 13px; cursor: pointer;
+    }
+    .suggestion.best { background: #e9f8f0; color: var(--green); border-color: #a7dfbf; }
+    .suggestion-label { width: 100%; color: var(--muted); font-size: 12px; font-weight: 800; }
+
+    .parse-grid {
+      display: grid; grid-template-columns: repeat(3, minmax(0,1fr));
+      gap: 10px; margin-top: 14px;
+    }
+    label { display: grid; gap: 5px; color: var(--muted); font-size: 12px; font-weight: 700; }
+    input, select {
+      width: 100%; min-height: 40px; border: 1px solid var(--line);
+      border-radius: 8px; background: #fff; padding: 0 10px;
+      color: var(--ink); outline: none; font-size: 14px;
+    }
+    input:focus, select:focus {
+      border-color: var(--brand); box-shadow: 0 0 0 3px rgba(37,99,235,.14);
+    }
+
+    .action-btns { display: flex; gap: 10px; margin-top: 14px; }
+    .btn-add, .btn-remove {
+      flex: 1; min-height: 44px; border-radius: 8px;
+      font-weight: 800; font-size: 15px; color: #fff;
+      display: inline-flex; align-items: center; justify-content: center; gap: 6px;
+    }
+    .btn-add { background: var(--green); }
+    .btn-remove { background: var(--red); }
+
+    .status { margin-top: 10px; color: var(--muted); font-size: 13px; min-height: 18px; }
+
+    /* 재고 탭 툴바 */
+    .inventory-toolbar {
+      display: flex; gap: 8px; align-items: center;
+    }
+    .inventory-toolbar input { min-height: 36px; flex: 1; font-size: 13px; }
+    .btn-export {
+      min-height: 36px; padding: 0 14px; border-radius: 8px;
+      background: #eef3fb; color: var(--ink); border: 1px solid var(--line);
+      font-weight: 700; font-size: 13px; white-space: nowrap;
+      display: inline-flex; align-items: center; gap: 6px;
+    }
+
+    .table-wrap { overflow: auto; }
+    table { width: 100%; border-collapse: collapse; min-width: 360px; }
+    th, td {
+      padding: 11px 10px; text-align: left;
+      border-bottom: 1px solid var(--line); font-size: 14px; vertical-align: middle;
+    }
+    th { color: var(--muted); font-size: 12px; background: var(--soft); }
+    .qty { width: 60px; font-weight: 800; }
+    .badge {
+      display: inline-flex; align-items: center; min-height: 24px;
+      border-radius: 999px; padding: 0 9px; background: #f4f7ff;
+      color: var(--brand-dark); border: 1px solid #d9e4ff;
+      font-size: 12px; font-weight: 700; white-space: nowrap;
+    }
+    .badge.gold { background: #fff8e8; color: #7a520c; border-color: #f1d79b; }
+    .empty { padding: 36px 16px; text-align: center; color: var(--muted); }
+    .mini-actions { display: flex; gap: 5px; justify-content: flex-end; }
+    .icon-btn {
+      width: 32px; height: 32px; border-radius: 6px;
+      border: 1px solid var(--line); background: #fff;
+      color: var(--ink); display: inline-grid; place-items: center; font-weight: 900;
+    }
+
+    @media (max-width: 560px) {
+      .parse-grid { grid-template-columns: 1fr 1fr; }
+    }
+  </style>
+</head>
+<body>
+<div class="app">
+  <header>
+    <h1>음성인식 OCG 재고관리</h1>
+    <p class="subtitle">카드명과 레어도를 말하면 재고 초안으로 변환합니다.</p>
+  </header>
+
+  <div class="tabs">
+    <button class="tab-btn active" data-tab="register">📢 음성 등록</button>
+    <button class="tab-btn" data-tab="inventory">📦 재고 목록</button>
+  </div>
+
+  <!-- 음성 등록 탭 -->
+  <div class="tab-pane active" id="tab-register">
+    <div class="section">
+      <div class="section-head"><h2>음성 등록</h2></div>
+      <div class="body">
+
+        <!-- 카드 이미지 + 말하기 1:1 -->
+        <div class="voice-pad">
+          <div class="card-preview-wrap" id="cardPreviewWrap">
+            <div class="card-preview-placeholder">카드 인식 후<br>이미지 표시</div>
+          </div>
+          <button class="mic" id="micBtn" type="button" aria-label="음성 입력 시작">
+            <span class="mic-mark">
+              <span class="mic-symbol">●</span>
+              <span id="micLabel">말하기</span>
+            </span>
+          </button>
+        </div>
+
+        <!-- 인식 텍스트 (1줄) -->
+        <textarea id="transcript" rows="1"
+          placeholder="예: 푸른 눈의 백룡 시크릿 레어 두 장 추가"
+          style="margin-top:12px;"></textarea>
+
+        <div class="suggestions" id="suggestions"></div>
+
+        <div class="parse-grid">
+          <label>카드명
+            <input id="cardName" list="cardNames" autocomplete="off">
+            <datalist id="cardNames"></datalist>
+          </label>
+          <label>레어도
+            <select id="rarity"></select>
+          </label>
+          <label>수량
+            <input id="quantity" type="number" min="1" value="1">
+          </label>
+        </div>
+
+        <!-- 숨김 (파싱 로직 유지용) -->
+        <select id="action" style="display:none"><option value="add">추가</option><option value="remove">차감</option></select>
+        <select id="condition" style="display:none"><option value="NM">NM</option></select>
+        <select id="language" style="display:none"><option value="KR">한국어</option></select>
+
+        <div class="status" id="status"></div>
+
+        <div class="action-btns">
+          <button class="btn-add" id="addBtn">＋ 입고</button>
+          <button class="btn-remove" id="removeBtn">－ 출고</button>
+        </div>
+      </div>
+    </div>
+  </div>
+
+  <!-- 재고 목록 탭 -->
+  <div class="tab-pane" id="tab-inventory">
+    <div class="section">
+      <div class="section-head">
+        <h2>재고 목록</h2>
+        <div class="inventory-toolbar">
+          <input id="search" placeholder="카드명 검색">
+          <button class="btn-export" id="exportBtn">⬇ 엑셀 내보내기</button>
+        </div>
+      </div>
+      <div class="table-wrap">
+        <table>
+          <thead>
+            <tr>
+              <th>카드명</th>
+              <th>레어도</th>
+              <th>수량</th>
+              <th>최근 변경</th>
+              <th></th>
+            </tr>
+          </thead>
+          <tbody id="inventoryBody"></tbody>
+        </table>
+        <div class="empty" id="empty">아직 등록된 카드가 없습니다.</div>
+      </div>
+    </div>
+  </div>
+</div>
+
+<script>
+  const SpeechRecognition = window.SpeechRecognition || window.webkitSpeechRecognition;
+  const storageKey = "ygoVoiceInventory.v2";
+  const YGO_API = "https://db.ygoprodeck.com/api/v7/cardinfo.php";
+  const CARD_NAMES_URL = "https://angbeesh-rgb.github.io/OCG-STOCK/card_names.json";
+  const CARD_CACHE_KEY = "ocg_card_names_cache";
+
+  // 카드 목록 — 초기엔 빈 배열, 로드 후 채워짐
+  let cards = [];
+
+  async function loadCardNames() {
+    // 로컬 캐시 확인 (24시간)
+    try {
+      const cached = JSON.parse(localStorage.getItem(CARD_CACHE_KEY) || 'null');
+      if (cached && cached.ts && Date.now() - cached.ts < 86400000 && cached.names?.length) {
+        cards = cached.names;
+        setStatus(`카드 목록 ${cards.length.toLocaleString()}개 로드 완료 (캐시)`);
+        return;
+      }
+    } catch(e) {}
+
+    try {
+      setStatus("카드 목록 불러오는 중...");
+      const res = await fetch(CARD_NAMES_URL);
+      if (!res.ok) throw new Error("fetch 실패");
+      cards = await res.json();
+      localStorage.setItem(CARD_CACHE_KEY, JSON.stringify({ ts: Date.now(), names: cards }));
+      setStatus(`카드 목록 ${cards.length.toLocaleString()}개 로드 완료`);
+    } catch(e) {
+      // 실패 시 기본 목록으로 폴백
+      cards = fallbackCards;
+      setStatus(`카드 목록 로드 실패 — 기본 목록(${cards.length}개)으로 동작 중`);
+    }
+    // datalist 업데이트
+    const dl = $("cardNames");
+    dl.innerHTML = "";
+    cards.forEach(name => {
+      const o = document.createElement("option");
+      o.value = name;
+      dl.appendChild(o);
+    });
+  }
+
+  // 폴백용 기본 카드 목록 (JSON 로드 실패 시)
+  const fallbackCards = [
+    "푸른 눈의 백룡","블랙 매지션","붉은 눈의 흑룡","하루 우라라","증식의 G",
+    "저택 와라시","유령토끼","드롤 & 로크 버드","무한포영","말살의 지명자",
+    "무덤의 지명자","원시생명체 니비루","라이트닝 스톰","금지된 일적","길항승부",
+    "삼전의 재","삼전의 호","신의 심판","신의 통고","인스펙트 보더",
+    "공아단의 영웅 라팔","액세스코드 토커","플뢰르 드 바로네스","네가로기어 아제우스",
+    "크샤트리라 펜리르","크샤트리라 유니콘","티아라멘츠 키토칼로스","빙검룡 미라제이드"
+  ];
+  async function fetchCardPrints(name) {
+    try {
+      const res = await fetch(`${YGO_API}?fname=${encodeURIComponent(name)}&language=ko`);
+      if (!res.ok) return null;
+      const data = await res.json();
+      const card = data.data?.[0];
+      if (!card) return null;
+      const rarities = card.card_sets ? [...new Set(card.card_sets.map(s => s.set_rarity))] : [];
+      return { name: card.name, rarities, imageUrl: card.card_images?.[0]?.image_url_small || null };
+    } catch(e) { return null; }
+  }
+
+  async function updateRarityFromAPI(cardName) {
+    if (!cardName) return;
+    setStatus(`"${cardName}" 인쇄판 정보 조회 중...`);
+    const result = await fetchCardPrints(cardName);
+    // 카드 이미지
+    const wrap = $("cardPreviewWrap");
+    if (result?.imageUrl) {
+      wrap.innerHTML = `<img src="${result.imageUrl}" alt="${escapeHtml(cardName)}">`;
+    } else {
+      wrap.innerHTML = `<div class="card-preview-placeholder">이미지 없음</div>`;
+    }
+    // 레어도
+    if (result?.rarities?.length) {
+      const sel = $("rarity");
+      sel.innerHTML = "";
+      result.rarities.forEach(r => {
+        const o = document.createElement("option");
+        o.value = r; o.textContent = r; sel.appendChild(o);
+      });
+      setStatus(`"${cardName}" — ${result.rarities.length}가지 레어도. 맞으면 입고/출고 버튼을 눌러줘.`);
+    } else {
+      resetRarityOptions();
+      setStatus(`"${cardName}" — DB에서 인쇄판 정보를 찾지 못했어. 레어도를 직접 선택해줘.`);
+    }
+  }
+
+  function resetRarityOptions() {
+    const sel = $("rarity");
+    sel.innerHTML = "";
+    rarityOptions.forEach(r => {
+      const o = document.createElement("option");
+      o.value = r; o.textContent = r; sel.appendChild(o);
+    });
+  }
+
+  /* ── YGOPRODECK ── */
+
+  const cardAliases = new Map([
+    ["푸른 눈의 백룡",["블루아이즈","블루 아이즈","푸백","파란눈의 백룡"]],
+    ["푸른 눈의 아백룡",["아백룡","블루아이즈 얼터너티브"]],
+    ["블랙 매지션",["블매","블랙매지션","블랙 마술사","검은 마술사"]],
+    ["블랙 매지션 걸",["블매걸","블랙매지션걸","매지션 걸"]],
+    ["증식의 G",["증식의 지","증지","증g","맥시씨"]],
+    ["하루 우라라",["우라라","하루우라라","애쉬"]],
+    ["저택 와라시",["와라시","고스트 벨"]],
+    ["유령토끼",["토끼","고스트 오거"]],
+    ["드롤 & 로크 버드",["드롤","드롤 로크","드롤락"]],
+    ["무한포영",["무포","인피니트 임퍼머넌스"]],
+    ["말살의 지명자",["말명자"]],
+    ["무덤의 지명자",["무명자"]],
+    ["원시생명체 니비루",["니비루"]],
+    ["해피의 깃털",["해깃"]],
+    ["소명의 신궁 아폴로우사",["아폴로우사","아폴로사"]],
+    ["네가로기어 아제우스",["아제우스","제우스"]],
+    ["섬도기동 인게이지",["인게이지"]],
+    ["섬도희 카가리",["카가리"]],
+    ["섬도희 레이",["레이"]],
+    ["낙인융합",["낙융"]],
+    ["데스피아의 도화 알베르",["알베르"]],
+    ["빙검룡 미라제이드",["미라제이드"]],
+    ["플뢰르 드 바로네스",["바로네스","바로니스"]],
+    ["초마도용기사 붉은 눈의 드라군",["드라군"]],
+    ["크샤트리라 펜리르",["펜리르"]],
+    ["크샤트리라 유니콘",["유니콘"]],
+    ["스프라이트 블루",["스프 블루"]],
+    ["스프라이트 엘프",["스프 엘프"]],
+    ["라이트닝 스톰",["라스톰"]],
+    ["금지된 일적",["일적"]],
+    ["삼전의 재",["삼재"]],
+    ["삼전의 호",["삼호"]],
+    ["길항승부",["길항"]],
+    ["인스펙트 보더",["보더"]],
+    ["공아단의 영웅 라팔",["라팔","공아단 라팔"]]
+  ]);
+
+  const rarityOptions = [
+    "Common","Rare","Super Rare","Ultra Rare","Secret Rare",
+    "Ultimate Rare","Collector's Rare","Prismatic Secret Rare",
+    "Quarter Century Secret Rare","Ghost Rare"
+  ];
+
+  const rarityAliases = [
+    { value:"Quarter Century Secret Rare", words:["쿼터 센추리","쿼센","쿼싴","25싴","25시크","쿼터시크"] },
+    { value:"Prismatic Secret Rare", words:["프리즈마틱","프싴","프시크"] },
+    { value:"Collector's Rare", words:["컬렉터즈","컬레","컬렉터 레어"] },
+    { value:"Ultimate Rare", words:["얼티","얼티밋","얼티메이트"] },
+    { value:"Secret Rare", words:["시크릿","시크","싴"] },
+    { value:"Ultra Rare", words:["울트라","울레","울트라 레어"] },
+    { value:"Super Rare", words:["슈퍼","슈레","슈퍼 레어"] },
+    { value:"Ghost Rare", words:["고스트","고레"] },
+    { value:"Rare", words:["레어"] },
+    { value:"Common", words:["노멀","노말","커먼","일반"] }
+  ];
+
+  const conditionAliases = [
+    { value:"NM", words:["니어민트","민트","nm"] },
+    { value:"LP", words:["라이트 플레이드","라플","lp"] },
+    { value:"MP", words:["모더레이트","mp"] },
+    { value:"HP", words:["헤비 플레이드","hp"] },
+    { value:"DMG", words:["데미지","손상","dmg"] }
+  ];
+
+  const actionAliases = [
+    { value:"sold", words:["판매","팔림","출고"] },
+    { value:"remove", words:["차감","제거","삭제","빼","뺌"] },
+    { value:"add", words:["추가","입고","등록","넣어","더해"] }
+  ];
+
+  const koreanNumbers = new Map([
+    ["한",1],["하나",1],["일",1],["두",2],["둘",2],["이",2],
+    ["세",3],["셋",3],["삼",3],["네",4],["넷",4],["사",4],
+    ["다섯",5],["오",5],["여섯",6],["육",6],["일곱",7],["칠",7],
+    ["여덟",8],["팔",8],["아홉",9],["구",9],["열",10],["십",10]
+  ]);
+
+  let recognition = null, listening = false, heardSpeech = false, silenceTimer = null;
+  let inventory = loadInventory();
+  const $ = id => document.getElementById(id);
+
+  /* ── 탭 ── */
+  document.querySelectorAll(".tab-btn").forEach(btn => {
+    btn.addEventListener("click", () => {
+      document.querySelectorAll(".tab-btn").forEach(b => b.classList.remove("active"));
+      document.querySelectorAll(".tab-pane").forEach(p => p.classList.remove("active"));
+      btn.classList.add("active");
+      document.getElementById("tab-" + btn.dataset.tab).classList.add("active");
+      if (btn.dataset.tab === "inventory") renderInventory();
+    });
+  });
+
+  /* ── 초기화 ── */
+  function init() {
+    resetRarityOptions();
+    loadCardNames(); // 11352개 카드명 비동기 로드
+    $("micBtn").addEventListener("click", toggleMic);
+    $("addBtn").addEventListener("click", () => { $("action").value = "add"; saveParsed(); });
+    $("removeBtn").addEventListener("click", () => { $("action").value = "remove"; saveParsed(); });
+    $("transcript").addEventListener("input", parseTranscript);
+    $("search").addEventListener("input", renderInventory);
+    $("exportBtn").addEventListener("click", exportToCSV);
+    $("cardName").addEventListener("input", () => {
+      updateSuggestions();
+      clearTimeout(window._cardTimer);
+      window._cardTimer = setTimeout(() => {
+        const name = $("cardName").value.trim();
+        if (name) updateRarityFromAPI(name);
+      }, 600);
+    });
+    setupSpeech();
+    renderInventory();
+    updateSuggestions();
+  }
+
+  /* ── 음성 인식 ── */
+  function setupSpeech() {
+    if (!SpeechRecognition) {
+      setStatus("이 브라우저는 음성 인식을 지원하지 않습니다. 문장을 직접 입력해도 됩니다.");
+      return;
+    }
+    recognition = new SpeechRecognition();
+    recognition.lang = "ko-KR";
+    recognition.interimResults = true;
+    recognition.continuous = false;
+    recognition.maxAlternatives = 3;
+
+    recognition.onstart = () => {
+      listening = true; heardSpeech = false;
+      $("micBtn").classList.add("listening");
+      $("micLabel").textContent = "듣는 중";
+      setStatus("듣고 있습니다.");
+      clearTimeout(silenceTimer);
+      silenceTimer = setTimeout(() => {
+        if (listening && !heardSpeech) setStatus("음성이 감지되지 않았습니다. 마이크 권한을 확인해주세요.");
+      }, 4500);
+    };
+    recognition.onspeechstart = () => { heardSpeech = true; setStatus("음성 감지됨."); };
+    recognition.onresult = event => {
+      // 모든 결과의 모든 alternatives 수집
+      const allTranscripts = [];
+      for (let i = 0; i < event.results.length; i++) {
+        const result = event.results[i];
+        for (let j = 0; j < result.length; j++) {
+          const t = result[j].transcript.trim();
+          if (t) allTranscripts.push({ text: t, confidence: result[j].confidence || 0, isFinal: result[i].isFinal });
+        }
+      }
+      if (!allTranscripts.length) return;
+
+      // 실시간 표시는 confidence 가장 높은 것
+      const best = allTranscripts.sort((a,b) => b.confidence - a.confidence)[0];
+      $("transcript").value = best.text;
+
+      // final 결과가 있으면 모든 후보로 퍼지 매칭해서 최고점 카드 선택
+      const finals = allTranscripts.filter(t => t.isFinal);
+      if (finals.length) {
+        parseBestFromAlternatives(finals.map(t => t.text));
+      } else {
+        parseTranscript(); // interim은 일단 현재 텍스트로만
+      }
+    };
+    recognition.onerror = event => {
+      listening = false; clearTimeout(silenceTimer);
+      $("micBtn").classList.remove("listening"); $("micLabel").textContent = "말하기";
+      setStatus(speechErrorMessage(event.error));
+    };
+    recognition.onend = () => {
+      listening = false; clearTimeout(silenceTimer);
+      $("micBtn").classList.remove("listening"); $("micLabel").textContent = "말하기";
+      if ($("transcript").value.trim()) parseTranscript();
+    };
+  }
+
+  function toggleMic() {
+    if (!recognition) { setStatus("문장을 직접 입력해주세요."); return; }
+    if (listening) { recognition.stop(); }
+    else { try { recognition.start(); } catch(e) { setStatus("잠시 후 다시 눌러주세요."); } }
+  }
+
+  function speechErrorMessage(error) {
+    const m = {
+      "not-allowed": "마이크 권한이 차단되었습니다. 브라우저 권한 설정에서 마이크를 허용해주세요.",
+      "no-speech": "음성이 감지되지 않았습니다.",
+      "network": "네트워크 오류로 음성 인식에 실패했습니다.",
+      "aborted": "음성 인식이 중단되었습니다."
+    };
+    return m[error] || `음성 인식 오류: ${error}`;
+  }
+
+  /* ── 여러 음성 후보에서 최고 매칭 카드 선택 ── */
+  function parseBestFromAlternatives(transcripts) {
+    let bestCard = null, bestScore = -1, bestTranscript = transcripts[0];
+    let bestRarity = "", bestQuantity = 1, bestAction = "add";
+
+    transcripts.forEach(text => {
+      const normalized = normalize(text);
+      const candidates = suggestCards(text, 3);
+      const cardName = findCardName(text, normalized, candidates);
+      const score = candidates.length ? candidates[0].score : 0;
+
+      if (score > bestScore) {
+        bestScore = score;
+        bestCard = cardName;
+        bestTranscript = text;
+        bestRarity = findAlias(normalized, rarityAliases) || "";
+        bestQuantity = findQuantity(normalized);
+        bestAction = findAlias(normalized, actionAliases) || "add";
+      }
+    });
+
+    // 결과 반영
+    $("transcript").value = bestTranscript;
+    if (bestCard) $("cardName").value = bestCard;
+    if (bestRarity) $("rarity").value = bestRarity;
+    $("quantity").value = bestQuantity;
+    $("action").value = bestAction;
+
+    updateSuggestions(suggestCards(bestTranscript, 5));
+    if (bestCard) {
+      updateRarityFromAPI(bestCard);
+    } else {
+      setStatus("카드명을 찾지 못했습니다. 후보를 선택하거나 직접 입력해주세요.");
+    }
+  }
+
+  /* ── 파싱 ── */
+  function normalize(text) { return text.toLowerCase().replace(/\s+/g," ").trim(); }
+
+  function normalizeCardText(text) {
+    return normalize(text)
+      .replace(/&/g,"앤").replace(/[^\u3131-\u318e\uac00-\ud7a3a-z0-9]/g,"")
+      .replace(/드래곤/g,"드레곤").replace(/매지션/g,"메지션").replace(/블랙/g,"블렉")
+      .replace(/크샤트리라/g,"크샤").replace(/티아라멘츠/g,"티아라").replace(/스프라이트/g,"스프")
+      .replace(/증식의지/g,"증식의g").replace(/증식지/g,"증식의g").replace(/증지/g,"증식의g")
+      .replace(/지$/g,"g");
+  }
+
+  function stripCommandWords(text) {
+    const removals = [
+      ...rarityAliases.flatMap(i=>i.words), ...conditionAliases.flatMap(i=>i.words),
+      ...actionAliases.flatMap(i=>i.words), "레어","한국어","일본어","영어","카드","좀","으로"
+    ];
+    let cleaned = text
+      .replace(/\d+\s*(장|개|매)/g,"")
+      .replace(/[한하나일두둘이세셋삼네넷사다섯오여섯육일곱칠여덟팔아홉구열십]+\s*(장|개|매)/g,"")
+      .trim();
+    for (const w of removals) cleaned = cleaned.replace(new RegExp(escapeRegExp(w),"gi"),"");
+    return cleaned.replace(/\s+/g," ").trim();
+  }
+
+  function parseTranscript() {
+    const text = $("transcript").value.trim();
+    const normalized = normalize(text);
+    if (!text) { setStatus("등록할 문장을 말하거나 입력해주세요."); return; }
+    const rarity = findAlias(normalized, rarityAliases) || "Common";
+    const condition = findAlias(normalized, conditionAliases) || "NM";
+    const action = findAlias(normalized, actionAliases) || "add";
+    const quantity = findQuantity(normalized);
+    const candidates = suggestCards(text, 5);
+    const cardName = findCardName(text, normalized, candidates);
+    $("rarity").value = rarity;
+    $("condition").value = condition;
+    $("action").value = action;
+    $("quantity").value = quantity;
+    $("cardName").value = cardName;
+    updateSuggestions(candidates);
+    if (cardName) updateRarityFromAPI(cardName);
+    else setStatus("카드명을 찾지 못했습니다. 후보를 선택하거나 직접 입력해주세요.");
+  }
+
+  function findAlias(text, groups) {
+    for (const g of groups)
+      if (g.words.some(w => text.includes(w.toLowerCase()))) return g.value;
+    return "";
+  }
+
+  function findQuantity(text) {
+    const m = text.match(/(\d+)\s*(장|개|매)?/);
+    if (m) return Math.max(1, Number(m[1]));
+    for (const [w,n] of koreanNumbers)
+      if (new RegExp(`${w}\\s*(장|개|매)?`).test(text)) return n;
+    return 1;
+  }
+
+  function findCardName(rawText, normalized, candidates=[]) {
+    const direct = cards.find(c => normalized.includes(normalize(c)));
+    if (direct) return direct;
+    const compactText = normalized.replace(/\s/g,"");
+    const compact = cards.find(c => compactText.includes(normalize(c).replace(/\s/g,"")));
+    if (compact) return compact;
+    for (const [card, aliases] of cardAliases)
+      if (aliases.some(a => normalizeCardText(rawText).includes(normalizeCardText(a)))) return card;
+    if (candidates.length && candidates[0].score >= 42) return candidates[0].card;
+    return stripCommandWords(rawText);
+  }
+
+  function updateSuggestions(precomputed=null) {
+    const input = $("cardName").value.trim() || $("transcript").value.trim();
+    const matches = precomputed || suggestCards(input, 6);
+    $("suggestions").innerHTML = [
+      `<div class="suggestion-label">비슷한 카드 후보</div>`,
+      ...matches.map((item,i) =>
+        `<button class="suggestion ${i===0?"best":""}" type="button" data-card="${escapeHtml(item.card)}">${escapeHtml(item.card)}</button>`)
+    ].join("");
+    if (!matches.length) { $("suggestions").innerHTML=`<div class="suggestion-label">후보가 없습니다.</div>`; return; }
+    document.querySelectorAll("[data-card]").forEach(btn => {
+      btn.addEventListener("click", () => {
+        $("cardName").value = btn.dataset.card;
+        updateSuggestions();
+        updateRarityFromAPI(btn.dataset.card);
+      });
+    });
+  }
+
+  function suggestCards(input, limit=5) {
+    if (!input) return cards.slice(0,limit).map(card=>({card,score:1}));
+    const cleaned = stripCommandWords(input);
+    const q = normalizeCardText(cleaned||input);
+    return cards.map(card=>({card,score:cardScore(q,card)}))
+      .sort((a,b)=>b.score-a.score||a.card.localeCompare(b.card,"ko"))
+      .slice(0,limit).filter(i=>i.score>8);
+  }
+
+  function cardScore(query, card) {
+    const cardKey = normalizeCardText(card);
+    const aliases = (cardAliases.get(card)||[]).map(normalizeCardText);
+    return Math.max(...[cardKey,...aliases].map(k=>similarity(query,k)));
+  }
+
+  function similarity(a,b) {
+    if (!a||!b) return 0;
+    if (b.includes(a)||a.includes(b)) return Math.max(a.length,b.length)*6+30;
+    const distance = levenshtein(a,b);
+    const maxLen = Math.max(a.length,b.length);
+    return Math.max(0,32-Math.round((distance/maxLen)*32))+sharedCharScore(a,b)+orderedSubScore(a,b);
+  }
+
+  function sharedCharScore(a,b) {
+    let s=0; for (const c of new Set(a)) if (b.includes(c)) s+=3; return s;
+  }
+
+  function orderedSubScore(a,b) {
+    let s=0,cur=0;
+    for (const c of a) { const i=b.indexOf(c,cur); if(i>=0){s+=2;cur=i+1;} }
+    return s;
+  }
+
+  function levenshtein(a,b) {
+    const prev=Array.from({length:b.length+1},(_,i)=>i);
+    const cur=Array.from({length:b.length+1},()=>0);
+    for (let i=1;i<=a.length;i++){
+      cur[0]=i;
+      for (let j=1;j<=b.length;j++){
+        const cost=a[i-1]===b[j-1]?0:1;
+        cur[j]=Math.min(cur[j-1]+1,prev[j]+1,prev[j-1]+cost);
+      }
+      for (let j=0;j<=b.length;j++) prev[j]=cur[j];
+    }
+    return prev[b.length];
+  }
+
+  /* ── 재고 저장 ── */
+  function saveParsed() {
+    const item = {
+      cardName: $("cardName").value.trim(),
+      rarity: $("rarity").value,
+      quantity: Math.max(1, Number($("quantity").value)||1),
+      action: $("action").value,
+      updatedAt: new Date().toISOString()
+    };
+    if (!item.cardName) { setStatus("카드명을 입력해야 합니다."); $("cardName").focus(); return; }
+    const idx = inventory.findIndex(r => r.cardName===item.cardName && r.rarity===item.rarity);
+    const delta = item.action==="add" ? item.quantity : -item.quantity;
+    if (idx>=0) {
+      inventory[idx].quantity += delta;
+      inventory[idx].updatedAt = item.updatedAt;
+      if (inventory[idx].quantity<=0) inventory.splice(idx,1);
+    } else if (delta>0) {
+      inventory.push({ cardName:item.cardName, rarity:item.rarity, quantity:item.quantity, updatedAt:item.updatedAt });
+    } else {
+      setStatus("차감할 재고가 없습니다."); return;
+    }
+    saveInventory();
+    renderInventory();
+    const verb = item.action==="add" ? "입고" : "출고";
+    setStatus(`"${item.cardName}" (${item.rarity}) ${item.quantity}장 ${verb} 완료.`);
+  }
+
+  /* ── 재고 렌더 ── */
+  function renderInventory() {
+    const query = normalize($("search")?.value || "");
+    const rows = inventory
+      .filter(i => normalize(`${i.cardName} ${i.rarity}`).includes(query))
+      .sort((a,b) => b.updatedAt.localeCompare(a.updatedAt));
+    $("inventoryBody").innerHTML = rows.map((item,index) => `
+      <tr>
+        <td><strong>${escapeHtml(item.cardName)}</strong></td>
+        <td><span class="badge ${isHighRarity(item.rarity)?"gold":""}">${escapeHtml(item.rarity)}</span></td>
+        <td class="qty">${item.quantity}</td>
+        <td>${formatDate(item.updatedAt)}</td>
+        <td>
+          <div class="mini-actions">
+            <button class="icon-btn" type="button" data-plus="${index}">+</button>
+            <button class="icon-btn" type="button" data-minus="${index}">-</button>
+          </div>
+        </td>
+      </tr>`).join("");
+    document.querySelectorAll("[data-plus]").forEach(btn =>
+      btn.addEventListener("click", () => adjustQuantity(rows[Number(btn.dataset.plus)], 1)));
+    document.querySelectorAll("[data-minus]").forEach(btn =>
+      btn.addEventListener("click", () => adjustQuantity(rows[Number(btn.dataset.minus)], -1)));
+    $("empty").style.display = rows.length ? "none" : "block";
+  }
+
+  function adjustQuantity(target, delta) {
+    const idx = inventory.findIndex(i => i===target);
+    if (idx<0) return;
+    inventory[idx].quantity += delta;
+    inventory[idx].updatedAt = new Date().toISOString();
+    if (inventory[idx].quantity<=0) inventory.splice(idx,1);
+    saveInventory(); renderInventory();
+  }
+
+  /* ── 엑셀(CSV) 내보내기 ── */
+  function exportToCSV() {
+    if (!inventory.length) { alert("내보낼 재고가 없습니다."); return; }
+    const header = ["카드명","레어도","수량","최근 변경"];
+    const rows = inventory
+      .sort((a,b) => a.cardName.localeCompare(b.cardName,"ko"))
+      .map(i => [i.cardName, i.rarity, i.quantity, formatDate(i.updatedAt)]);
+    const csv = [header, ...rows]
+      .map(row => row.map(v => `"${String(v).replace(/"/g,'""')}"`).join(","))
+      .join("\n");
+    const BOM = "\uFEFF"; // 한글 깨짐 방지
+    const blob = new Blob([BOM + csv], { type:"text/csv;charset=utf-8;" });
+    const url = URL.createObjectURL(blob);
+    const a = document.createElement("a");
+    a.href = url;
+    a.download = `OCG재고_${new Date().toISOString().slice(0,10)}.csv`;
+    a.click();
+    URL.revokeObjectURL(url);
+  }
+
+  /* ── 유틸 ── */
+  function isHighRarity(r) { return !["Common","Rare","Super Rare"].includes(r); }
+  function setStatus(msg) { $("status").textContent = msg; }
+  function saveInventory() { localStorage.setItem(storageKey, JSON.stringify(inventory)); }
+  function loadInventory() {
+    try { return JSON.parse(localStorage.getItem(storageKey)) || []; } catch { return []; }
+  }
+  function formatDate(v) {
+    return new Intl.DateTimeFormat("ko-KR",{month:"2-digit",day:"2-digit",hour:"2-digit",minute:"2-digit"}).format(new Date(v));
+  }
+  function escapeRegExp(v) { return v.replace(/[.*+?^${}()|[\]\\]/g,"\\$&"); }
+  function escapeHtml(v) {
+    return String(v).replace(/&/g,"&amp;").replace(/</g,"&lt;").replace(/>/g,"&gt;").replace(/"/g,"&quot;").replace(/'/g,"&#039;");
+  }
+
+  init();
+</script>
+</body>
+</html>
