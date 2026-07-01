@@ -736,10 +736,14 @@
 
   function similarity(a,b) {
     if (!a||!b) return 0;
-    if (b.includes(a)||a.includes(b)) return Math.max(a.length,b.length)*6+30;
+    if (b.includes(a)||a.includes(b)) {
+      const lenBonus = Math.max(0, 20 - Math.abs(a.length - b.length) * 3);
+      return Math.max(a.length,b.length)*6+30+lenBonus;
+    }
     const distance = levenshtein(a,b);
     const maxLen = Math.max(a.length,b.length);
-    return Math.max(0,32-Math.round((distance/maxLen)*32))+sharedCharScore(a,b)+orderedSubScore(a,b);
+    const lenProximity = Math.max(0, 15 - Math.abs(a.length - b.length) * 2);
+    return Math.max(0,32-Math.round((distance/maxLen)*32))+sharedCharScore(a,b)+orderedSubScore(a,b)+lenProximity;
   }
 
   function sharedCharScore(a,b) {
