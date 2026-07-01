@@ -321,17 +321,32 @@
   ];
   async function fetchCardPrints(name) {
     try {
-      const res = await fetch(`${YGO_API}?fname=${encodeURIComponent(name)}&language=ko`);
-      if (!res.ok) return null;
-      const data = await res.json();
-      const card = data.data?.[0];
+      // 1차: 정확한 이름으로 조회
+      let res = await fetch(`${YGO_API}?name=${encodeURIComponent(name)}&language=ko`);
+      let data = res.ok ? await res.json() : null;
+      let card = data?.data?.[0];
+
+      // 2차: 부분 검색으로 폴백
+      if (!card) {
+        res = await fetch(`${YGO_API}?fname=${encodeURIComponent(name)}&language=ko`);
+        data = res.ok ? await res.json() : null;
+        card = data?.data?.[0];
+      }
+
       if (!card) return null;
-      const rarities = card.card_sets ? [...new Set(card.card_sets.map(s => s.set_rarity))] : [];
-      return { name: card.name, rarities, imageUrl: card.card_images?.[0]?.image_url_small || null };
-    } catch(e) { return null; }
+
+      // 레어도 중복 제거 + 정렬
+      const rarities = card.card_sets
+        ? [...new Set(card.card_sets.map(s => s.set_rarity))].sort()
+        : [];
+      const imageUrl = card.card_images?.[0]?.image_url_small || null;
+      return { name: card.name, rarities, imageUrl, sets: card.card_sets };
+    } catch(e) {
+      return null;
+    }
   }
 
-  async function updateRarityFromAPI(cardName) {
+  async function updateRarityFromAPI(cardName, voiceRarity = "") {
     if (!cardName) return;
     setStatus(`"${cardName}" 인쇄판 정보 조회 중...`);
     const result = await fetchCardPrints(cardName);
@@ -342,7 +357,7 @@
     } else {
       wrap.innerHTML = `<div class="card-preview-placeholder">이미지 없음</div>`;
     }
-    // 레어도
+    // 레어도 목록 채우기
     if (result?.rarities?.length) {
       const sel = $("rarity");
       sel.innerHTML = "";
@@ -350,7 +365,26 @@
         const o = document.createElement("option");
         o.value = r; o.textContent = r; sel.appendChild(o);
       });
-      setStatus(`"${cardName}" — ${result.rarities.length}가지 레어도. 맞으면 입고/출고 버튼을 눌러줘.`);
+
+      // 음성으로 인식된 레어도가 있으면 자동 선택
+      if (voiceRarity) {
+        // 완전 일치 먼저
+        const exactMatch = result.rarities.find(r => r.toLowerCase() === voiceRarity.toLowerCase());
+        // 부분 일치 (예: "Secret Rare" ↔ "Prismatic Secret Rare")
+        const partialMatch = result.rarities.find(r =>
+          r.toLowerCase().includes(voiceRarity.toLowerCase()) ||
+          voiceRarity.toLowerCase().includes(r.toLowerCase())
+        );
+        const matched = exactMatch || partialMatch;
+        if (matched) {
+          sel.value = matched;
+          setStatus(`"${cardName}" — ${matched} 자동 선택됨. 맞으면 입고/출고 버튼을 눌러줘.`);
+        } else {
+          setStatus(`"${cardName}" — ${result.rarities.length}가지 레어도. 레어도를 선택해줘.`);
+        }
+      } else {
+        setStatus(`"${cardName}" — ${result.rarities.length}가지 레어도. 맞으면 입고/출고 버튼을 눌러줘.`);
+      }
     } else {
       resetRarityOptions();
       setStatus(`"${cardName}" — DB에서 인쇄판 정보를 찾지 못했어. 레어도를 직접 선택해줘.`);
@@ -572,7 +606,8 @@
 
       if (score > bestScore) {
         bestScore = score;
-        bestCard = cardName;
+        // 퍼지 매칭 1위로 자동 교정 (candidates[0]이 가장 높은 점수)
+        bestCard = candidates.length ? candidates[0].card : cardName;
         bestTranscript = text;
         bestRarity = findAlias(normalized, rarityAliases) || "";
         bestQuantity = findQuantity(normalized);
@@ -580,16 +615,16 @@
       }
     });
 
-    // 결과 반영
+    // 인식 텍스트를 교정된 카드명으로 표시
     $("transcript").value = bestTranscript;
     if (bestCard) $("cardName").value = bestCard;
-    if (bestRarity) $("rarity").value = bestRarity;
     $("quantity").value = bestQuantity;
     $("action").value = bestAction;
 
     updateSuggestions(suggestCards(bestTranscript, 5));
     if (bestCard) {
-      updateRarityFromAPI(bestCard);
+      // API에서 레어도 가져온 후 음성 인식된 레어도 자동 선택
+      updateRarityFromAPI(bestCard, bestRarity);
     } else {
       setStatus("카드명을 찾지 못했습니다. 후보를 선택하거나 직접 입력해주세요.");
     }
