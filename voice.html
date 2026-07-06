@@ -267,7 +267,48 @@
   </div>
 </div>
 
-<script>
+<script type="module">
+  import { initializeApp } from "https://www.gstatic.com/firebasejs/10.12.0/firebase-app.js";
+  import { getFirestore, collection, doc, setDoc, getDocs, deleteDoc, query, orderBy } from "https://www.gstatic.com/firebasejs/10.12.0/firebase-firestore.js";
+
+  const firebaseConfig = {
+    apiKey: "AIzaSyByx2t4mhxDkBqe97iml3W5w5a8OSw8Qso",
+    authDomain: "ocg-stock.firebaseapp.com",
+    projectId: "ocg-stock",
+    storageBucket: "ocg-stock.firebasestorage.app",
+    messagingSenderId: "1015596291596",
+    appId: "1:1015596291596:web:ec72caa7bbda8ae1c00029"
+  };
+
+  const app = initializeApp(firebaseConfig);
+  const db = getFirestore(app);
+  const INVENTORY_COL = "inventory";
+
+  // Firestore 저장
+  async function saveToFirestore(item) {
+    const id = `${item.cardName}_${item.rarity}`.replace(/[^a-zA-Z0-9가-힣_]/g, "_");
+    await setDoc(doc(db, INVENTORY_COL, id), {
+      ...item,
+      updatedAt: new Date().toISOString()
+    }, { merge: true });
+  }
+
+  // Firestore 전체 불러오기
+  async function loadFromFirestore() {
+    const snap = await getDocs(collection(db, INVENTORY_COL));
+    return snap.docs.map(d => d.data());
+  }
+
+  // Firestore 삭제
+  async function deleteFromFirestore(cardName, rarity) {
+    const id = `${cardName}_${rarity}`.replace(/[^a-zA-Z0-9가-힣_]/g, "_");
+    await deleteDoc(doc(db, INVENTORY_COL, id));
+  }
+
+  // 전역으로 노출
+  window._firestore = { saveToFirestore, loadFromFirestore, deleteFromFirestore };
+  window.dispatchEvent(new Event("firestoreReady"));
+</script>
   const SpeechRecognition = window.SpeechRecognition || window.webkitSpeechRecognition;
   const storageKey = "ygoVoiceInventory.v2";
   const YGO_API = "https://db.ygoprodeck.com/api/v7/cardinfo.php";
@@ -326,16 +367,25 @@
       let data = res.ok ? await res.json() : null;
       let card = data?.data?.[0];
 
-      // 2차: 부분 검색으로 폴백
+      // 2차: 부분 검색으로 폴백 — 결과 중 카드명이 가장 유사한 것 선택
       if (!card) {
         res = await fetch(`${YGO_API}?fname=${encodeURIComponent(name)}&language=ko`);
         data = res.ok ? await res.json() : null;
-        card = data?.data?.[0];
+        if (data?.data?.length) {
+          // 입력 카드명과 가장 유사한 카드 선택 (단순히 첫 번째 X)
+          const nameNorm = normalize(name);
+          card = data.data.reduce((best, c) => {
+            const cNorm = normalize(c.name || "");
+            const bestNorm = normalize(best.name || "");
+            const cScore = similarity(nameNorm, cNorm);
+            const bestScore = similarity(nameNorm, bestNorm);
+            return cScore > bestScore ? c : best;
+          });
+        }
       }
 
       if (!card) return null;
 
-      // 레어도 중복 제거 + 정렬
       const rarities = card.card_sets
         ? [...new Set(card.card_sets.map(s => s.set_rarity))].sort()
         : [];
@@ -516,6 +566,13 @@
     setupSpeech();
     renderInventory();
     updateSuggestions();
+
+    // Firestore 준비되면 동기화
+    if (window._firestore) {
+      syncFromFirestore();
+    } else {
+      window.addEventListener("firestoreReady", () => syncFromFirestore(), { once: true });
+    }
   }
 
   /* ── 음성 인식 ── */
@@ -855,9 +912,35 @@
   /* ── 유틸 ── */
   function isHighRarity(r) { return !["Common","Rare","Super Rare"].includes(r); }
   function setStatus(msg) { $("status").textContent = msg; }
-  function saveInventory() { localStorage.setItem(storageKey, JSON.stringify(inventory)); }
+  function saveInventory() {
+    // localStorage 백업
+    localStorage.setItem(storageKey, JSON.stringify(inventory));
+    // Firestore 동기화 (비동기, 실패해도 로컬은 유지)
+    if (window._firestore) {
+      inventory.forEach(item => window._firestore.saveToFirestore(item).catch(console.error));
+    }
+  }
+
   function loadInventory() {
     try { return JSON.parse(localStorage.getItem(storageKey)) || []; } catch { return []; }
+  }
+
+  async function syncFromFirestore() {
+    if (!window._firestore) return;
+    try {
+      setStatus("Firestore에서 재고 불러오는 중...");
+      const items = await window._firestore.loadFromFirestore();
+      if (items.length > 0) {
+        inventory = items;
+        localStorage.setItem(storageKey, JSON.stringify(inventory));
+        renderInventory();
+        setStatus(`재고 ${items.length}개 동기화 완료`);
+      } else {
+        setStatus("저장된 재고가 없어.");
+      }
+    } catch(e) {
+      setStatus("Firestore 동기화 실패 — 로컬 데이터로 동작 중");
+    }
   }
   function formatDate(v) {
     return new Intl.DateTimeFormat("ko-KR",{month:"2-digit",day:"2-digit",hour:"2-digit",minute:"2-digit"}).format(new Date(v));
