@@ -267,10 +267,12 @@
   </div>
 </div>
 
-<script type="module">
-  import { initializeApp } from "https://www.gstatic.com/firebasejs/10.12.0/firebase-app.js";
-  import { getFirestore, collection, doc, setDoc, getDocs, deleteDoc } from "https://www.gstatic.com/firebasejs/10.12.0/firebase-firestore.js";
+<!-- Firebase compat -->
+<script src="https://www.gstatic.com/firebasejs/10.12.0/firebase-app-compat.js"></script>
+<script src="https://www.gstatic.com/firebasejs/10.12.0/firebase-firestore-compat.js"></script>
 
+<script>
+  // Firebase 초기화
   const firebaseConfig = {
     apiKey: "AIzaSyByx2t4mhxDkBqe97iml3W5w5a8OSw8Qso",
     authDomain: "ocg-stock.firebaseapp.com",
@@ -279,10 +281,10 @@
     messagingSenderId: "1015596291596",
     appId: "1:1015596291596:web:ec72caa7bbda8ae1c00029"
   };
-
-  const app = initializeApp(firebaseConfig);
-  const db = getFirestore(app);
+  firebase.initializeApp(firebaseConfig);
+  const db = firebase.firestore();
   const INVENTORY_COL = "inventory";
+
   const storageKey = "ygoVoiceInventory.v2";
   const YGO_API = "https://db.ygoprodeck.com/api/v7/cardinfo.php";
   const CARD_NAMES_URL = "https://angbeesh-rgb.github.io/OCG-STOCK/card_names.json";
@@ -294,25 +296,25 @@
 
   /* ── Firestore ── */
   async function saveToFirestore(item) {
-    const id = `${item.cardName}_${item.rarity}`.replace(/[^a-zA-Z0-9가-힣_]/g, "_");
-    await setDoc(doc(db, INVENTORY_COL, id), item, { merge: true });
+    const id = (item.cardName + "_" + item.rarity).replace(/[^a-zA-Z0-9가-힣_]/g, "_");
+    await db.collection(INVENTORY_COL).doc(id).set(item, { merge: true });
   }
 
   async function deleteFromFirestore(cardName, rarity) {
-    const id = `${cardName}_${rarity}`.replace(/[^a-zA-Z0-9가-힣_]/g, "_");
-    await deleteDoc(doc(db, INVENTORY_COL, id));
+    const id = (cardName + "_" + rarity).replace(/[^a-zA-Z0-9가-힣_]/g, "_");
+    await db.collection(INVENTORY_COL).doc(id).delete();
   }
 
   async function syncFromFirestore() {
     try {
       setStatus("Firestore에서 재고 불러오는 중...");
-      const snap = await getDocs(collection(db, INVENTORY_COL));
+      const snap = await db.collection(INVENTORY_COL).get();
       const items = snap.docs.map(d => d.data());
       if (items.length > 0) {
         inventory = items;
         localStorage.setItem(storageKey, JSON.stringify(inventory));
         renderInventory();
-        setStatus(`재고 ${items.length}개 동기화 완료`);
+        setStatus("재고 " + items.length + "개 동기화 완료");
       } else {
         setStatus("저장된 재고가 없어.");
       }
@@ -324,7 +326,6 @@
 
   function saveInventory() {
     localStorage.setItem(storageKey, JSON.stringify(inventory));
-    console.log("saveInventory 호출됨, 항목 수:", inventory.length);
     inventory.forEach(item => {
       saveToFirestore(item)
         .then(() => console.log("Firestore 저장 성공:", item.cardName))
