@@ -324,7 +324,12 @@
 
   function saveInventory() {
     localStorage.setItem(storageKey, JSON.stringify(inventory));
-    inventory.forEach(item => saveToFirestore(item).catch(console.error));
+    console.log("saveInventory 호출됨, 항목 수:", inventory.length);
+    inventory.forEach(item => {
+      saveToFirestore(item)
+        .then(() => console.log("Firestore 저장 성공:", item.cardName))
+        .catch(e => console.error("Firestore 저장 실패:", e));
+    });
   }
 
   function loadInventory() {
