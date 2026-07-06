@@ -325,11 +325,13 @@
   }
 
   function saveInventory() {
+    alert("saveInventory 호출됨, 아이템 수: " + inventory.length);
     localStorage.setItem(storageKey, JSON.stringify(inventory));
     inventory.forEach(item => {
+      alert("Firestore 저장 시도: " + item.cardName);
       saveToFirestore(item)
-        .then(() => console.log("Firestore 저장 성공:", item.cardName))
-        .catch(e => console.error("Firestore 저장 실패:", e));
+        .then(() => alert("Firestore 저장 성공: " + item.cardName))
+        .catch(e => alert("Firestore 저장 실패: " + e.message + " / code: " + e.code));
     });
   }
 
