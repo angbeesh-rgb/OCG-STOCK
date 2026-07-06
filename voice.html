@@ -269,7 +269,7 @@
 
 <script type="module">
   import { initializeApp } from "https://www.gstatic.com/firebasejs/10.12.0/firebase-app.js";
-  import { getFirestore, collection, doc, setDoc, getDocs, deleteDoc, query, orderBy } from "https://www.gstatic.com/firebasejs/10.12.0/firebase-firestore.js";
+  import { getFirestore, collection, doc, setDoc, getDocs, deleteDoc } from "https://www.gstatic.com/firebasejs/10.12.0/firebase-firestore.js";
 
   const firebaseConfig = {
     apiKey: "AIzaSyByx2t4mhxDkBqe97iml3W5w5a8OSw8Qso",
@@ -283,53 +283,65 @@
   const app = initializeApp(firebaseConfig);
   const db = getFirestore(app);
   const INVENTORY_COL = "inventory";
-
-  // Firestore 저장
-  async function saveToFirestore(item) {
-    const id = `${item.cardName}_${item.rarity}`.replace(/[^a-zA-Z0-9가-힣_]/g, "_");
-    await setDoc(doc(db, INVENTORY_COL, id), {
-      ...item,
-      updatedAt: new Date().toISOString()
-    }, { merge: true });
-  }
-
-  // Firestore 전체 불러오기
-  async function loadFromFirestore() {
-    const snap = await getDocs(collection(db, INVENTORY_COL));
-    return snap.docs.map(d => d.data());
-  }
-
-  // Firestore 삭제
-  async function deleteFromFirestore(cardName, rarity) {
-    const id = `${cardName}_${rarity}`.replace(/[^a-zA-Z0-9가-힣_]/g, "_");
-    await deleteDoc(doc(db, INVENTORY_COL, id));
-  }
-
-  // 전역으로 노출
-  window._firestore = { saveToFirestore, loadFromFirestore, deleteFromFirestore };
-  window.dispatchEvent(new Event("firestoreReady"));
-</script>
-<script>
-  const SpeechRecognition = window.SpeechRecognition || window.webkitSpeechRecognition;
   const storageKey = "ygoVoiceInventory.v2";
   const YGO_API = "https://db.ygoprodeck.com/api/v7/cardinfo.php";
   const CARD_NAMES_URL = "https://angbeesh-rgb.github.io/OCG-STOCK/card_names.json";
   const CARD_CACHE_KEY = "ocg_card_names_cache";
 
-  // 카드 목록 — 초기엔 빈 배열, 로드 후 채워짐
+  const $ = id => document.getElementById(id);
   let cards = [];
+  let inventory = loadInventory();
 
+  /* ── Firestore ── */
+  async function saveToFirestore(item) {
+    const id = `${item.cardName}_${item.rarity}`.replace(/[^a-zA-Z0-9가-힣_]/g, "_");
+    await setDoc(doc(db, INVENTORY_COL, id), item, { merge: true });
+  }
+
+  async function deleteFromFirestore(cardName, rarity) {
+    const id = `${cardName}_${rarity}`.replace(/[^a-zA-Z0-9가-힣_]/g, "_");
+    await deleteDoc(doc(db, INVENTORY_COL, id));
+  }
+
+  async function syncFromFirestore() {
+    try {
+      setStatus("Firestore에서 재고 불러오는 중...");
+      const snap = await getDocs(collection(db, INVENTORY_COL));
+      const items = snap.docs.map(d => d.data());
+      if (items.length > 0) {
+        inventory = items;
+        localStorage.setItem(storageKey, JSON.stringify(inventory));
+        renderInventory();
+        setStatus(`재고 ${items.length}개 동기화 완료`);
+      } else {
+        setStatus("저장된 재고가 없어.");
+      }
+    } catch(e) {
+      console.error("Firestore 동기화 실패:", e);
+      setStatus("Firestore 동기화 실패 — 로컬 데이터로 동작 중");
+    }
+  }
+
+  function saveInventory() {
+    localStorage.setItem(storageKey, JSON.stringify(inventory));
+    inventory.forEach(item => saveToFirestore(item).catch(console.error));
+  }
+
+  function loadInventory() {
+    try { return JSON.parse(localStorage.getItem(storageKey)) || []; } catch { return []; }
+  }
+
+  /* ── 카드 목록 로드 ── */
   async function loadCardNames() {
-    // 로컬 캐시 확인 (24시간)
     try {
       const cached = JSON.parse(localStorage.getItem(CARD_CACHE_KEY) || 'null');
       if (cached && cached.ts && Date.now() - cached.ts < 86400000 && cached.names?.length) {
         cards = cached.names;
         setStatus(`카드 목록 ${cards.length.toLocaleString()}개 로드 완료 (캐시)`);
+        updateDatalist();
         return;
       }
     } catch(e) {}
-
     try {
       setStatus("카드 목록 불러오는 중...");
       const res = await fetch(CARD_NAMES_URL);
@@ -338,28 +350,25 @@
       localStorage.setItem(CARD_CACHE_KEY, JSON.stringify({ ts: Date.now(), names: cards }));
       setStatus(`카드 목록 ${cards.length.toLocaleString()}개 로드 완료`);
     } catch(e) {
-      // 실패 시 기본 목록으로 폴백
       cards = fallbackCards;
       setStatus(`카드 목록 로드 실패 — 기본 목록(${cards.length}개)으로 동작 중`);
     }
-    // datalist 업데이트
+    updateDatalist();
+  }
+
+  function updateDatalist() {
     const dl = $("cardNames");
     dl.innerHTML = "";
     cards.forEach(name => {
       const o = document.createElement("option");
-      o.value = name;
-      dl.appendChild(o);
+      o.value = name; dl.appendChild(o);
     });
   }
 
-  // 폴백용 기본 카드 목록 (JSON 로드 실패 시)
   const fallbackCards = [
     "푸른 눈의 백룡","블랙 매지션","붉은 눈의 흑룡","하루 우라라","증식의 G",
     "저택 와라시","유령토끼","드롤 & 로크 버드","무한포영","말살의 지명자",
-    "무덤의 지명자","원시생명체 니비루","라이트닝 스톰","금지된 일적","길항승부",
-    "삼전의 재","삼전의 호","신의 심판","신의 통고","인스펙트 보더",
-    "공아단의 영웅 라팔","액세스코드 토커","플뢰르 드 바로네스","네가로기어 아제우스",
-    "크샤트리라 펜리르","크샤트리라 유니콘","티아라멘츠 키토칼로스","빙검룡 미라제이드"
+    "무덤의 지명자","원시생명체 니비루","공아단의 영웅 라팔"
   ];
   async function fetchCardPrints(name) {
     try {
@@ -532,8 +541,6 @@
   ]);
 
   let recognition = null, listening = false, heardSpeech = false, silenceTimer = null;
-  let inventory = loadInventory();
-  const $ = id => document.getElementById(id);
 
   /* ── 탭 ── */
   document.querySelectorAll(".tab-btn").forEach(btn => {
@@ -567,13 +574,6 @@
     setupSpeech();
     renderInventory();
     updateSuggestions();
-
-    // Firestore 준비되면 동기화
-    if (window._firestore) {
-      syncFromFirestore();
-    } else {
-      window.addEventListener("firestoreReady", () => syncFromFirestore(), { once: true });
-    }
   }
 
   /* ── 음성 인식 ── */
@@ -913,36 +913,6 @@
   /* ── 유틸 ── */
   function isHighRarity(r) { return !["Common","Rare","Super Rare"].includes(r); }
   function setStatus(msg) { $("status").textContent = msg; }
-  function saveInventory() {
-    // localStorage 백업
-    localStorage.setItem(storageKey, JSON.stringify(inventory));
-    // Firestore 동기화 (비동기, 실패해도 로컬은 유지)
-    if (window._firestore) {
-      inventory.forEach(item => window._firestore.saveToFirestore(item).catch(console.error));
-    }
-  }
-
-  function loadInventory() {
-    try { return JSON.parse(localStorage.getItem(storageKey)) || []; } catch { return []; }
-  }
-
-  async function syncFromFirestore() {
-    if (!window._firestore) return;
-    try {
-      setStatus("Firestore에서 재고 불러오는 중...");
-      const items = await window._firestore.loadFromFirestore();
-      if (items.length > 0) {
-        inventory = items;
-        localStorage.setItem(storageKey, JSON.stringify(inventory));
-        renderInventory();
-        setStatus(`재고 ${items.length}개 동기화 완료`);
-      } else {
-        setStatus("저장된 재고가 없어.");
-      }
-    } catch(e) {
-      setStatus("Firestore 동기화 실패 — 로컬 데이터로 동작 중");
-    }
-  }
   function formatDate(v) {
     return new Intl.DateTimeFormat("ko-KR",{month:"2-digit",day:"2-digit",hour:"2-digit",minute:"2-digit"}).format(new Date(v));
   }
@@ -952,6 +922,7 @@
   }
 
   init();
+  syncFromFirestore();
 </script>
 </body>
 </html>
