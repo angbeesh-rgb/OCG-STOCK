@@ -222,6 +222,11 @@
             <input id="quantity" type="number" min="1" value="1">
           </label>
         </div>
+        <div style="margin-top:6px;">
+          <button id="registerCardBtn" type="button" style="background:none;border:1px solid #ccc;border-radius:6px;padding:4px 10px;font-size:12px;color:#555;cursor:pointer;">
+            + 목록에 없는 카드명 새로 등록
+          </button>
+        </div>
 
         <!-- 숨김 (파싱 로직 유지용) -->
         <select id="action" style="display:none"><option value="add">추가</option><option value="remove">차감</option></select>
@@ -289,6 +294,7 @@
   const YGO_API = "https://db.ygoprodeck.com/api/v7/cardinfo.php";
   const CARD_NAMES_URL = "https://angbeesh-rgb.github.io/OCG-STOCK/card_names.json";
   const CARD_CACHE_KEY = "ocg_card_names_cache";
+  const CUSTOM_CARDS_COL = "customCardNames";
 
   const $ = id => document.getElementById(id);
   let cards = [];
@@ -340,6 +346,36 @@
     try { return JSON.parse(localStorage.getItem(storageKey)) || []; } catch { return []; }
   }
 
+  /* ── 커스텀 카드명 (DB에 없는 신규 카드 사용자 등록) ── */
+  async function saveCustomCardName(name) {
+    const id = name.replace(/[^a-zA-Z0-9가-힣_]/g, "_");
+    await db.collection(CUSTOM_CARDS_COL).doc(id).set({ name, addedAt: new Date().toISOString() });
+  }
+
+  async function loadCustomCardNames() {
+    try {
+      const snap = await db.collection(CUSTOM_CARDS_COL).get();
+      return snap.docs.map(d => d.data().name).filter(Boolean);
+    } catch(e) {
+      console.error("커스텀 카드명 로드 실패:", e);
+      return [];
+    }
+  }
+
+  function registerNewCard() {
+    const name = $("cardName").value.trim();
+    if (!name) { setStatus("등록할 카드명을 입력해줘."); return; }
+    if (cards.includes(name)) { setStatus(`"${name}" 은 이미 카드 목록에 있어.`); return; }
+    setStatus(`"${name}" 등록 중...`);
+    saveCustomCardName(name)
+      .then(() => {
+        cards.push(name);
+        updateDatalist();
+        setStatus(`"${name}" 새 카드명으로 등록 완료. (이미지는 DB에 없어서 안 뜰 수 있어)`);
+      })
+      .catch(e => setStatus("등록 실패: " + e.message));
+  }
+
   /* ── 카드 목록 로드 ── */
   async function loadCardNames() {
     try {
@@ -347,21 +383,21 @@
       if (cached && cached.ts && Date.now() - cached.ts < 86400000 && cached.names?.length) {
         cards = cached.names;
         setStatus(`카드 목록 ${cards.length.toLocaleString()}개 로드 완료 (캐시)`);
-        updateDatalist();
-        return;
+      } else {
+        setStatus("카드 목록 불러오는 중...");
+        const res = await fetch(CARD_NAMES_URL);
+        if (!res.ok) throw new Error("fetch 실패");
+        cards = await res.json();
+        localStorage.setItem(CARD_CACHE_KEY, JSON.stringify({ ts: Date.now(), names: cards }));
+        setStatus(`카드 목록 ${cards.length.toLocaleString()}개 로드 완료`);
       }
-    } catch(e) {}
-    try {
-      setStatus("카드 목록 불러오는 중...");
-      const res = await fetch(CARD_NAMES_URL);
-      if (!res.ok) throw new Error("fetch 실패");
-      cards = await res.json();
-      localStorage.setItem(CARD_CACHE_KEY, JSON.stringify({ ts: Date.now(), names: cards }));
-      setStatus(`카드 목록 ${cards.length.toLocaleString()}개 로드 완료`);
     } catch(e) {
       cards = fallbackCards;
       setStatus(`카드 목록 로드 실패 — 기본 목록(${cards.length}개)으로 동작 중`);
     }
+    // 사용자가 등록한 커스텀 카드명 병합 (다른 기기에서 등록한 것도 포함)
+    const custom = await loadCustomCardNames();
+    custom.forEach(name => { if (!cards.includes(name)) cards.push(name); });
     updateDatalist();
   }
 
@@ -426,37 +462,14 @@
     } else {
       wrap.innerHTML = `<div class="card-preview-placeholder">이미지 없음</div>`;
     }
-    // 레어도 목록 채우기
-    if (result?.rarities?.length) {
-      const sel = $("rarity");
-      sel.innerHTML = "";
-      result.rarities.forEach(r => {
-        const o = document.createElement("option");
-        o.value = r; o.textContent = r; sel.appendChild(o);
-      });
-
-      // 음성으로 인식된 레어도가 있으면 자동 선택
-      if (voiceRarity) {
-        // 완전 일치 먼저
-        const exactMatch = result.rarities.find(r => r.toLowerCase() === voiceRarity.toLowerCase());
-        // 부분 일치 (예: "Secret Rare" ↔ "Prismatic Secret Rare")
-        const partialMatch = result.rarities.find(r =>
-          r.toLowerCase().includes(voiceRarity.toLowerCase()) ||
-          voiceRarity.toLowerCase().includes(r.toLowerCase())
-        );
-        const matched = exactMatch || partialMatch;
-        if (matched) {
-          sel.value = matched;
-          setStatus(`"${cardName}" — ${matched} 자동 선택됨. 맞으면 입고/출고 버튼을 눌러줘.`);
-        } else {
-          setStatus(`"${cardName}" — ${result.rarities.length}가지 레어도. 레어도를 선택해줘.`);
-        }
-      } else {
-        setStatus(`"${cardName}" — ${result.rarities.length}가지 레어도. 맞으면 입고/출고 버튼을 눌러줘.`);
-      }
+    // 레어도 목록: 카드별 DB 조회 결과 대신 항상 전체 레어도 목록 사용 (DB 데이터가 실제와 안 맞는 경우가 있어서)
+    resetRarityOptions();
+    const sel = $("rarity");
+    if (voiceRarity && rarityOptions.includes(voiceRarity)) {
+      sel.value = voiceRarity;
+      setStatus(`"${cardName}" — ${voiceRarity} 자동 선택됨. 맞으면 입고/출고 버튼을 눌러줘.`);
     } else {
-      resetRarityOptions();
-      setStatus(`"${cardName}" — DB에서 인쇄판 정보를 찾지 못했어. 레어도를 직접 선택해줘.`);
+      setStatus(`"${cardName}" — 레어도를 선택해줘.`);
     }
   }
 
@@ -572,6 +585,7 @@
     $("transcript").addEventListener("input", parseTranscript);
     $("search").addEventListener("input", renderInventory);
     $("exportBtn").addEventListener("click", exportToCSV);
+    $("registerCardBtn").addEventListener("click", registerNewCard);
     $("cardName").addEventListener("input", () => {
       updateSuggestions();
       clearTimeout(window._cardTimer);
