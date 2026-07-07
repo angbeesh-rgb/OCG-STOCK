@@ -324,14 +324,27 @@
     }
   }
 
+  const debugPanel = document.createElement("div");
+  debugPanel.style.cssText = "position:fixed;bottom:0;left:0;right:0;max-height:40vh;overflow:auto;background:#111;color:#0f0;font-size:11px;padding:8px;z-index:99999;white-space:pre-wrap;";
+  document.body.appendChild(debugPanel);
+  function dbg(msg) {
+    const line = document.createElement("div");
+    line.textContent = new Date().toLocaleTimeString() + " — " + msg;
+    debugPanel.appendChild(line);
+    debugPanel.scrollTop = debugPanel.scrollHeight;
+  }
+
+  window.addEventListener("error", e => dbg("🔴 JS 에러: " + e.message));
+  window.addEventListener("unhandledrejection", e => dbg("🔴 미처리 Promise 거부: " + (e.reason?.message || e.reason)));
+
   function saveInventory() {
-    alert("saveInventory 호출됨, 아이템 수: " + inventory.length);
+    dbg("saveInventory 호출됨, 아이템 수: " + inventory.length);
     localStorage.setItem(storageKey, JSON.stringify(inventory));
     inventory.forEach(item => {
-      alert("Firestore 저장 시도: " + item.cardName);
+      dbg("Firestore 저장 시도: " + item.cardName);
       saveToFirestore(item)
-        .then(() => alert("Firestore 저장 성공: " + item.cardName))
-        .catch(e => alert("Firestore 저장 실패: " + e.message + " / code: " + e.code));
+        .then(() => dbg("✅ 저장 성공: " + item.cardName))
+        .catch(e => dbg("❌ 저장 실패: " + item.cardName + " / " + e.message + " / code:" + e.code));
     });
   }
 
