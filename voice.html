@@ -324,32 +324,15 @@
     }
   }
 
-  const debugPanel = document.createElement("div");
-  debugPanel.style.cssText = "position:fixed;bottom:0;left:0;right:0;max-height:40vh;overflow:auto;background:#111;color:#0f0;font-size:11px;padding:8px;z-index:99999;white-space:pre-wrap;";
-  document.body.appendChild(debugPanel);
-  function dbg(msg) {
-    const line = document.createElement("div");
-    line.textContent = new Date().toLocaleTimeString() + " — " + msg;
-    debugPanel.appendChild(line);
-    debugPanel.scrollTop = debugPanel.scrollHeight;
-  }
-
-  window.addEventListener("error", e => dbg("🔴 JS 에러: " + e.message));
-  window.addEventListener("unhandledrejection", e => dbg("🔴 미처리 Promise 거부: " + (e.reason?.message || e.reason)));
-
   function saveInventory(changedCard, removed) {
     localStorage.setItem(storageKey, JSON.stringify(inventory));
     if (!changedCard) return; // 변경분 없으면(예: 최초 로드) Firestore 호출 안 함
     if (removed) {
-      dbg("Firestore 삭제 시도: " + changedCard.cardName);
       deleteFromFirestore(changedCard.cardName, changedCard.rarity)
-        .then(() => dbg("✅ 삭제 성공: " + changedCard.cardName))
-        .catch(e => dbg("❌ 삭제 실패: " + changedCard.cardName + " / " + e.message + " / code:" + e.code));
+        .catch(e => console.error("Firestore 삭제 실패:", changedCard.cardName, e));
     } else {
-      dbg("Firestore 저장 시도: " + changedCard.cardName);
       saveToFirestore(changedCard)
-        .then(() => dbg("✅ 저장 성공: " + changedCard.cardName))
-        .catch(e => dbg("❌ 저장 실패: " + changedCard.cardName + " / " + e.message + " / code:" + e.code));
+        .catch(e => console.error("Firestore 저장 실패:", changedCard.cardName, e));
     }
   }
 
