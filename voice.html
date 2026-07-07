@@ -4,6 +4,10 @@
   <meta charset="utf-8">
   <meta name="viewport" content="width=device-width, initial-scale=1">
   <title>음성인식 OCG 재고관리</title>
+  <link rel="manifest" href="./manifest.json">
+  <meta name="theme-color" content="#2563eb">
+  <link rel="icon" href="./icon-192.png">
+  <link rel="apple-touch-icon" href="./icon-192.png">
   <style>
     :root {
       color-scheme: light;
@@ -962,6 +966,12 @@
 
   init();
   syncFromFirestore();
+
+  if ("serviceWorker" in navigator) {
+    window.addEventListener("load", () => {
+      navigator.serviceWorker.register("./sw.js").catch(e => console.error("SW 등록 실패:", e));
+    });
+  }
 </script>
 </body>
 </html>
