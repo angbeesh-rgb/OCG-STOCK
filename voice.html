@@ -283,7 +283,7 @@
   };
   firebase.initializeApp(firebaseConfig);
   const db = firebase.firestore();
-  db.settings({ experimentalForceLongPolling: true, merge: true });
+  db.settings({ experimentalAutoDetectLongPolling: true });
   const INVENTORY_COL = "inventory";
 
   const storageKey = "ygoVoiceInventory.v2";
