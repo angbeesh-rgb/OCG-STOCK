@@ -337,15 +337,20 @@
   window.addEventListener("error", e => dbg("🔴 JS 에러: " + e.message));
   window.addEventListener("unhandledrejection", e => dbg("🔴 미처리 Promise 거부: " + (e.reason?.message || e.reason)));
 
-  function saveInventory() {
-    dbg("saveInventory 호출됨, 아이템 수: " + inventory.length);
+  function saveInventory(changedCard, removed) {
     localStorage.setItem(storageKey, JSON.stringify(inventory));
-    inventory.forEach(item => {
-      dbg("Firestore 저장 시도: " + item.cardName);
-      saveToFirestore(item)
-        .then(() => dbg("✅ 저장 성공: " + item.cardName))
-        .catch(e => dbg("❌ 저장 실패: " + item.cardName + " / " + e.message + " / code:" + e.code));
-    });
+    if (!changedCard) return; // 변경분 없으면(예: 최초 로드) Firestore 호출 안 함
+    if (removed) {
+      dbg("Firestore 삭제 시도: " + changedCard.cardName);
+      deleteFromFirestore(changedCard.cardName, changedCard.rarity)
+        .then(() => dbg("✅ 삭제 성공: " + changedCard.cardName))
+        .catch(e => dbg("❌ 삭제 실패: " + changedCard.cardName + " / " + e.message + " / code:" + e.code));
+    } else {
+      dbg("Firestore 저장 시도: " + changedCard.cardName);
+      saveToFirestore(changedCard)
+        .then(() => dbg("✅ 저장 성공: " + changedCard.cardName))
+        .catch(e => dbg("❌ 저장 실패: " + changedCard.cardName + " / " + e.message + " / code:" + e.code));
+    }
   }
 
   function loadInventory() {
@@ -861,16 +866,25 @@
     if (!item.cardName) { setStatus("카드명을 입력해야 합니다."); $("cardName").focus(); return; }
     const idx = inventory.findIndex(r => r.cardName===item.cardName && r.rarity===item.rarity);
     const delta = item.action==="add" ? item.quantity : -item.quantity;
+    let changedCard, removed = false;
     if (idx>=0) {
       inventory[idx].quantity += delta;
       inventory[idx].updatedAt = item.updatedAt;
-      if (inventory[idx].quantity<=0) inventory.splice(idx,1);
+      if (inventory[idx].quantity<=0) {
+        changedCard = { cardName: inventory[idx].cardName, rarity: inventory[idx].rarity };
+        removed = true;
+        inventory.splice(idx,1);
+      } else {
+        changedCard = inventory[idx];
+      }
     } else if (delta>0) {
-      inventory.push({ cardName:item.cardName, rarity:item.rarity, quantity:item.quantity, updatedAt:item.updatedAt });
+      const newCard = { cardName:item.cardName, rarity:item.rarity, quantity:item.quantity, updatedAt:item.updatedAt };
+      inventory.push(newCard);
+      changedCard = newCard;
     } else {
       setStatus("차감할 재고가 없습니다."); return;
     }
-    saveInventory();
+    saveInventory(changedCard, removed);
     renderInventory();
     const verb = item.action==="add" ? "입고" : "출고";
     setStatus(`"${item.cardName}" (${item.rarity}) ${item.quantity}장 ${verb} 완료.`);
@@ -907,8 +921,15 @@
     if (idx<0) return;
     inventory[idx].quantity += delta;
     inventory[idx].updatedAt = new Date().toISOString();
-    if (inventory[idx].quantity<=0) inventory.splice(idx,1);
-    saveInventory(); renderInventory();
+    let changedCard, removed = false;
+    if (inventory[idx].quantity<=0) {
+      changedCard = { cardName: inventory[idx].cardName, rarity: inventory[idx].rarity };
+      removed = true;
+      inventory.splice(idx,1);
+    } else {
+      changedCard = inventory[idx];
+    }
+    saveInventory(changedCard, removed); renderInventory();
   }
 
   /* ── 엑셀(CSV) 내보내기 ── */
