@@ -223,7 +223,11 @@
             <select id="rarity"></select>
           </label>
           <label>수량
-            <input id="quantity" type="number" min="1" value="1">
+            <div style="display:flex;align-items:center;gap:4px;">
+              <button id="qtyMinusBtn" type="button" style="width:32px;height:32px;border:1px solid #ccc;border-radius:6px;background:#f5f7fb;font-size:16px;cursor:pointer;">－</button>
+              <input id="quantity" type="number" min="1" value="1" style="flex:1;text-align:center;">
+              <button id="qtyPlusBtn" type="button" style="width:32px;height:32px;border:1px solid #ccc;border-radius:6px;background:#f5f7fb;font-size:16px;cursor:pointer;">＋</button>
+            </div>
           </label>
         </div>
         <div style="margin-top:6px;">
@@ -593,6 +597,14 @@
     $("search").addEventListener("input", renderInventory);
     $("exportBtn").addEventListener("click", exportToCSV);
     $("registerCardBtn").addEventListener("click", registerNewCard);
+    $("qtyMinusBtn").addEventListener("click", () => {
+      const v = Math.max(1, (Number($("quantity").value)||1) - 1);
+      $("quantity").value = v;
+    });
+    $("qtyPlusBtn").addEventListener("click", () => {
+      const v = (Number($("quantity").value)||1) + 1;
+      $("quantity").value = v;
+    });
     $("cardName").addEventListener("input", () => {
       updateSuggestions();
       clearTimeout(window._cardTimer);
@@ -941,6 +953,11 @@
       changedCard = newCard;
     } else {
       setStatus("차감할 재고가 없습니다."); return;
+    }
+    if (!cards.includes(item.cardName)) {
+      saveCustomCardName(item.cardName).catch(e => console.error("커스텀 카드명 자동 등록 실패:", e));
+      cards.push(item.cardName);
+      updateDatalist();
     }
     saveInventory(changedCard, removed);
     renderInventory();
