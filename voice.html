@@ -303,6 +303,43 @@
   const CARD_NAMES_URL = "https://angbeesh-rgb.github.io/OCG-STOCK/card_names.json";
   const CARD_CACHE_KEY = "ocg_card_names_cache";
   const CUSTOM_CARDS_COL = "customCardNames";
+  const KOR_CID_MAP_URL = "https://angbeesh-rgb.github.io/OCG-STOCK/kor_name_to_cid.json";
+  const KOR_CID_CACHE_KEY = "ocg_kor_cid_map_cache";
+  let korCidMap = {};
+
+  async function loadKorCidMap() {
+    try {
+      const cached = JSON.parse(localStorage.getItem(KOR_CID_CACHE_KEY) || 'null');
+      if (cached && cached.ts && Date.now() - cached.ts < 86400000 && cached.map) {
+        korCidMap = cached.map;
+        return;
+      }
+      const res = await fetch(KOR_CID_MAP_URL);
+      if (!res.ok) throw new Error("fetch 실패");
+      korCidMap = await res.json();
+      localStorage.setItem(KOR_CID_CACHE_KEY, JSON.stringify({ ts: Date.now(), map: korCidMap }));
+    } catch(e) {
+      console.error("코나미 cid 매핑 로드 실패:", e);
+      korCidMap = {};
+    }
+  }
+
+  async function fetchKonamiImage(cardName) {
+    const cid = korCidMap[cardName];
+    if (!cid) return null;
+    try {
+      const res = await fetch(OCR_WORKER_URL, {
+        method: "POST",
+        headers: { "Content-Type": "application/json" },
+        body: JSON.stringify({ konamiCid: cid })
+      });
+      const data = await res.json();
+      return data.imageUrl || null;
+    } catch(e) {
+      console.error("코나미 이미지 조회 실패:", e);
+      return null;
+    }
+  }
 
   const $ = id => document.getElementById(id);
   let cards = [];
@@ -468,7 +505,13 @@
     if (result?.imageUrl) {
       wrap.innerHTML = `<img src="${result.imageUrl}" alt="${escapeHtml(cardName)}">`;
     } else {
-      wrap.innerHTML = `<div class="card-preview-placeholder">이미지 없음</div>`;
+      wrap.innerHTML = `<div class="card-preview-placeholder">이미지 불러오는 중...</div>`;
+      const konamiUrl = await fetchKonamiImage(cardName);
+      if (konamiUrl) {
+        wrap.innerHTML = `<img src="${konamiUrl}" alt="${escapeHtml(cardName)}">`;
+      } else {
+        wrap.innerHTML = `<div class="card-preview-placeholder">이미지 없음</div>`;
+      }
     }
     // 레어도 목록: 카드별 DB 조회 결과 대신 항상 전체 레어도 목록 사용 (DB 데이터가 실제와 안 맞는 경우가 있어서)
     resetRarityOptions();
@@ -589,7 +632,8 @@
   /* ── 초기화 ── */
   function init() {
     resetRarityOptions();
-    loadCardNames(); // 11352개 카드명 비동기 로드
+    loadCardNames(); // 카드명 비동기 로드
+    loadKorCidMap(); // 코나미 cid 매핑 비동기 로드
     $("micBtn").addEventListener("click", toggleMic);
     $("addBtn").addEventListener("click", () => { $("action").value = "add"; saveParsed(); });
     $("removeBtn").addEventListener("click", () => { $("action").value = "remove"; saveParsed(); });
