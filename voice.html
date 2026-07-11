@@ -1022,6 +1022,12 @@
     renderInventory();
     const verb = item.action==="add" ? "입고" : "출고";
     setStatus(`"${item.cardName}" (${item.rarity}) ${item.quantity}장 ${verb} 완료.`);
+
+    // 다음 입력을 위해 초기화
+    $("cardName").value = "";
+    $("transcript").value = "";
+    $("quantity").value = 1;
+    resetRarityOptions();
   }
 
   /* ── 재고 렌더 ── */
